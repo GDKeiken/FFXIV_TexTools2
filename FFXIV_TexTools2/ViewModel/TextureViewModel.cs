@@ -1041,11 +1041,19 @@ namespace FFXIV_TexTools2.ViewModel
 
 			bool bBadData = false;
 
-            if (offset == 0 && colorBmp != null)
+            if (offset == 0)
             {
                 TextureType = "Type: 16.16.16.16f ABGR\nMipMaps: None";
 
                 TextureDimensions = "(4 x 16)";
+
+                if(colorBmp == null) 
+                {
+                    colorBmp = new Bitmap(4, 16);
+
+					// the offset is still bad and import still won't even work
+					bBadData = true;
+				}
 
                 alphaBitmap = Imaging.CreateBitmapSourceFromHBitmap(colorBmp.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
                 alphaBitmap.Freeze();
@@ -1058,20 +1066,6 @@ namespace FFXIV_TexTools2.ViewModel
                 colorBmp.Dispose();
                 removeAlphaBitmap.Dispose();
             }
-			else if (offset == 0)
-			{
-				TextureType = "Type: Bad Data\nMipMaps: None";
-				TextureDimensions = "(0 x 0)";
-
-				int width = 128;
-				int stride = width / 8;
-				noAlphaBitmap = alphaBitmap = BitmapSource.Create(width, width, 96, 96, System.Windows.Media.PixelFormats.Indexed1,
-					new BitmapPalette(new System.Collections.Generic.List<System.Windows.Media.Color> { System.Windows.Media.Colors.White }), new byte[width * stride], stride);
-				alphaBitmap.Freeze();
-				noAlphaBitmap.Freeze();
-
-				bBadData = true;
-			}
             else
             {
                 if (!isVFX)
