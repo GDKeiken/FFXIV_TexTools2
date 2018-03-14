@@ -1038,12 +1038,6 @@ namespace FFXIV_TexTools2.ViewModel
                     }
                     else
                     {
-
-                        if (mtrlData.NormalOffset != 0)
-                        {
-                            normalData = TEX.GetTex(mtrlData.NormalOffset, Strings.ItemsDat);
-                        }
-
                         if (mtrlData.MaskOffset != 0)
                         {
                             maskData = TEX.GetTex(mtrlData.MaskOffset, Strings.ItemsDat);
@@ -1055,36 +1049,49 @@ namespace FFXIV_TexTools2.ViewModel
                             diffuseData = TEX.GetTex(mtrlData.DiffuseOffset, Strings.ItemsDat);
                             if (mtrlData.DiffusePath.Contains("human") && !mtrlData.DiffusePath.Contains("demi"))
                             {
-                                isBody = true;
-                                diffuseBMP = Imaging.CreateBitmapSourceFromHBitmap(diffuseData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                                normalBMP = Imaging.CreateBitmapSourceFromHBitmap(normalData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+								isBody = true;
+								diffuseBMP = Imaging.CreateBitmapSourceFromHBitmap(diffuseData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+								// access violation
+                                //normalBMP = Imaging.CreateBitmapSourceFromHBitmap(normalData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
                             }
-                        }
+						}
 
-                        if (!isBody && mtrlData.SpecularOffset != 0)
-                        {
-                            specularData = TEX.GetTex(mtrlData.SpecularOffset, Strings.ItemsDat);
-                            specularBMP = Imaging.CreateBitmapSourceFromHBitmap(specularData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                        }
+						if (mtrlData.NormalOffset != 0)
+						{
+							normalData = TEX.GetTex(mtrlData.NormalOffset, Strings.ItemsDat);
+							if (isBody)
+							{
+								normalBMP = Imaging.CreateBitmapSourceFromHBitmap(normalData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+							}
+						}
 
-                        if (!isBody && specularData == null)
-                        {
-                            var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, maskData, null, mtrlData);
-                            diffuseBMP = maps[0];
-                            specularBMP = maps[1];
-                            normalBMP = maps[2];
-                            alphaBMP = maps[3];
-                            emissiveBMP = maps[4];
-                        }
-                        else if (!isBody && specularData != null)
-                        {
-                            var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, null, specularData, mtrlData);
-                            diffuseBMP = maps[0];
-                            specularBMP = maps[1];
-                            normalBMP = maps[2];
-                            alphaBMP = maps[3];
-                            emissiveBMP = maps[4];
-                        }
+						if (!isBody)
+						{
+							if (mtrlData.SpecularOffset != 0)
+							{
+								specularData = TEX.GetTex(mtrlData.SpecularOffset, Strings.ItemsDat);
+								specularBMP = Imaging.CreateBitmapSourceFromHBitmap(specularData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+							}
+
+							if (specularData == null)
+							{
+								var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, maskData, null, mtrlData);
+								diffuseBMP = maps[0];
+								specularBMP = maps[1];
+								normalBMP = maps[2];
+								alphaBMP = maps[3];
+								emissiveBMP = maps[4];
+							}
+							else// if (specularData != null)
+							{
+								var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, null, specularData, mtrlData);
+								diffuseBMP = maps[0];
+								specularBMP = maps[1];
+								normalBMP = maps[2];
+								alphaBMP = maps[3];
+								emissiveBMP = maps[4];
+							}
+						}
 
                         if (normalData != null)
                         {

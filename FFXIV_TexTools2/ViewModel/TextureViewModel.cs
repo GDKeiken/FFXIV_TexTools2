@@ -1039,7 +1039,9 @@ namespace FFXIV_TexTools2.ViewModel
                 ActiveToggle = "Enable/Disable";
             }
 
-            if (offset == 0)
+			bool bBadData = false;
+
+            if (offset == 0 && colorBmp != null)
             {
                 TextureType = "Type: 16.16.16.16f ABGR\nMipMaps: None";
 
@@ -1056,6 +1058,20 @@ namespace FFXIV_TexTools2.ViewModel
                 colorBmp.Dispose();
                 removeAlphaBitmap.Dispose();
             }
+			else if (offset == 0)
+			{
+				TextureType = "Type: Bad Data\nMipMaps: None";
+				TextureDimensions = "(0 x 0)";
+
+				int width = 128;
+				int stride = width / 8;
+				noAlphaBitmap = alphaBitmap = BitmapSource.Create(width, width, 96, 96, System.Windows.Media.PixelFormats.Indexed1,
+					new BitmapPalette(new System.Collections.Generic.List<System.Windows.Media.Color> { System.Windows.Media.Colors.White }), new byte[width * stride], stride);
+				alphaBitmap.Freeze();
+				noAlphaBitmap.Freeze();
+
+				bBadData = true;
+			}
             else
             {
                 if (!isVFX)
@@ -1150,6 +1166,13 @@ namespace FFXIV_TexTools2.ViewModel
             {
                 OpenEnabled = false;
             }
+
+			if (bBadData)
+			{
+				ImportEnabled = false;
+				SaveEnabled = false;
+				ActiveEnabled = false;
+			}
         }
 
         /// <summary>
