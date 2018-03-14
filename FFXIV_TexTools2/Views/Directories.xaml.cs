@@ -45,7 +45,9 @@ namespace FFXIV_TexTools2.Views
 
             var indexBackupsPath = Path.GetFullPath(Properties.Settings.Default.IndexBackups_Directory);
             indexBackupsDir.Text = indexBackupsPath;
-        }
+			
+			modsDir.Text = Path.GetFullPath(Properties.Settings.Default.Mods_Directory);
+		}
 
         private void FFXIVDirButton_Click(object sender, RoutedEventArgs e)
         {
@@ -209,5 +211,22 @@ namespace FFXIV_TexTools2.Views
 
             Directory.Delete(target_dir, false);
         }
-    }
+
+		private void modsDirButton_Click(object sender, RoutedEventArgs e)
+		{
+			string oldModListLocation = modsDir.Text;
+			FolderSelectDialog folderSelect = new FolderSelectDialog()
+			{
+				Title = "Select new location to look for Mod file",
+				InitialDirectory = oldModListLocation
+			};
+
+			if (folderSelect.ShowDialog())
+			{
+				Properties.Settings.Default.Mods_Directory = folderSelect.FileName;
+				Properties.Settings.Default.Save();
+				modsDir.Text = folderSelect.FileName;
+			}
+		}
+	}
 }

@@ -152,7 +152,16 @@ namespace FFXIV_TexTools2.ViewModel
                 Properties.Settings.Default.Save();
             }
 
-            if (!Directory.Exists(indexBackupDir))
+			string modsDir = Properties.Settings.Default.Mods_Directory;
+			if (String.IsNullOrEmpty(modsDir))
+			{
+				string md = Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "\\TexTools\\ModPacks";
+				Directory.CreateDirectory(md);
+				Properties.Settings.Default.Mods_Directory = md;
+				Properties.Settings.Default.Save();
+			}
+
+			if (!Directory.Exists(indexBackupDir))
             {
                 Properties.Settings.Default.FFXIV_Ver = ffxivVersion.ToString();
                 Properties.Settings.Default.Save();
