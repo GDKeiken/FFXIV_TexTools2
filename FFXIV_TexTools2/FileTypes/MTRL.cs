@@ -106,7 +106,8 @@ namespace FFXIV_TexTools2.Material
                 ComboBoxInfo cbi = new ComboBoxInfo() { Name = Strings.All, ID = "0",  IsNum = true };
                 cbiList.Add(cbi);
             }
-            else if (selectedCategory.Equals(Strings.Pets) || selectedCategory.Equals(Strings.Mounts) || selectedCategory.Equals(Strings.Minions) || selectedCategory.Equals(Strings.Monster))
+            else if (selectedCategory.Equals(Strings.Pets) || selectedCategory.Equals(Strings.Mounts) || selectedCategory.Equals(Strings.Minions) 
+                || selectedCategory.Equals(Strings.Monster) || selectedCategory.Equals(Strings.DemiHuman))
             {
                 cbiList = new ObservableCollection<ComboBoxInfo>();
                 ComboBoxInfo cbi = new ComboBoxInfo() { Name = Strings.Monster, ID = "0", IsNum = true };
@@ -241,23 +242,25 @@ namespace FFXIV_TexTools2.Material
             }
             else if (selectedCategory.Equals(Strings.Pets))
             {
-                int part = 1;
+                cbiList = new List<ComboBoxInfo>();
 
-                if (item.ItemName.Equals(Strings.Selene) || item.ItemName.Equals(Strings.Bishop_Autoturret))
+                string[] bChar = new string[] { "a", "b", "c", "d" };
+
+                MTRLFolder = String.Format(Strings.MonsterMtrlFolder, item.PrimaryModelID, item.PrimaryModelBody.PadLeft(4, '0')) + item.PrimaryModelVariant.PadLeft(4, '0');
+                item.PrimaryMTRLFolder = MTRLFolder;
+
+                foreach (var c in bChar)
                 {
-                    part = 2;
+                    var MTRLFile = String.Format(Strings.MonsterMtrlFile, item.PrimaryModelID, item.PrimaryModelBody.PadLeft(4, '0'), c);
+
+                    if (Helper.FileExists(FFCRC.GetHash(MTRLFile), FFCRC.GetHash(MTRLFolder), Strings.ItemsDat))
+                    {
+                        cbiList.Add(new ComboBoxInfo() { Name = c, ID = "", IsNum = false });
+                    }
                 }
 
-                for (int i = 1; i < 20; i++)
-                {
-                    MTRLFolder = String.Format(Strings.MonsterMtrlFolder, Info.petID[item.ItemName], part.ToString().PadLeft(4, '0')) + i.ToString().PadLeft(4, '0');
-
-                    MTRLDict.Add(FFCRC.GetHash(MTRLFolder), i);
-                }
-
-                cbiList = new List<ComboBoxInfo>(Helper.FolderExistsList(MTRLDict, Strings.ItemsDat));
             }
-            else if (selectedCategory.Equals(Strings.Mounts))
+            else if (selectedCategory.Equals(Strings.Mounts) || selectedCategory.Equals(Strings.Monster) || selectedCategory.Equals(Strings.DemiHuman))
             {
                 cbiList = new List<ComboBoxInfo>();
 
@@ -517,15 +520,8 @@ namespace FFXIV_TexTools2.Material
             }
             else if (selectedCategory.Equals(Strings.Pets))
             {
-                int p = 1;
-
-                if (item.ItemName.Equals(Strings.Selene) || item.ItemName.Equals(Strings.Bishop_Autoturret))
-                {
-                    p = 2;
-                }
-
-                MTRLFolder = String.Format(Strings.MonsterMtrlFolder, Info.petID[item.ItemName], p.ToString().PadLeft(4, '0')) + part.PadLeft(4, '0');
-                MTRLFile = String.Format(Strings.MonsterMtrlFile, Info.petID[item.ItemName], p.ToString().PadLeft(4, '0'), body);
+                MTRLFile = String.Format(Strings.MonsterMtrlFile, item.PrimaryModelID, item.PrimaryModelBody.PadLeft(4, '0'), part);
+                MTRLFolder = item.PrimaryMTRLFolder;
 
                 if (Helper.FileExists(FFCRC.GetHash(MTRLFile), FFCRC.GetHash(MTRLFolder), Strings.ItemsDat))
                 {
@@ -542,7 +538,7 @@ namespace FFXIV_TexTools2.Material
                     return null;
                 }
             }
-            else if (selectedCategory.Equals(Strings.Mounts))
+            else if (selectedCategory.Equals(Strings.Mounts) || selectedCategory.Equals(Strings.Monster) || selectedCategory.Equals(Strings.DemiHuman))
             {
                 if (item.PrimaryMTRLFolder.Contains("demihuman"))
                 {
@@ -796,14 +792,14 @@ namespace FFXIV_TexTools2.Material
                 MTRLFolder = String.Format(Strings.FaceMtrlFolder, race, partNum.PadLeft(4, '0'));
                 MTRLFile = String.Format(Strings.FaceMtrlFile, race, partNum.PadLeft(4, '0'), Info.FaceTypes[type], part);
                 offset = Helper.GetDataOffset(FFCRC.GetHash(MTRLFolder), FFCRC.GetHash(MTRLFile), Strings.ItemsDat);
-                if(offset == 0)
+                if (offset == 0)
                 {
-                    foreach(var p in partList)
+                    foreach (var p in partList)
                     {
                         MTRLFile = String.Format(Strings.FaceMtrlFile, race, partNum.PadLeft(4, '0'), Info.FaceTypes[type], p);
                         offset = Helper.GetDataOffset(FFCRC.GetHash(MTRLFolder), FFCRC.GetHash(MTRLFile), Strings.ItemsDat);
 
-                        if(offset != 0)
+                        if (offset != 0)
                         {
                             break;
                         }
@@ -832,7 +828,7 @@ namespace FFXIV_TexTools2.Material
 
                 offset = Helper.GetDataOffset(FFCRC.GetHash(MTRLFolder), FFCRC.GetHash(MTRLFile), Strings.ItemsDat);
             }
-            else if (selectedCategory.Equals(Strings.Mounts))
+            else if (selectedCategory.Equals(Strings.Mounts) || selectedCategory.Equals(Strings.Monster) || selectedCategory.Equals(Strings.DemiHuman))
             {
                 isUncompressed = false;
 

@@ -28,6 +28,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Forms;
 using System.Windows.Media.Imaging;
 using System.Xml;
 
@@ -195,7 +196,7 @@ namespace FFXIV_TexTools2.IO
                 skelName = "c0101";
             }
 
-            string[] skeleton1 = File.ReadAllLines(Directory.GetCurrentDirectory() + "/Skeletons/" + skelName + ".skel");
+            string[] skeleton1 = File.ReadAllLines(Directory.GetCurrentDirectory() + "/Skeletons/" + skelName + ".skel");            
 
             Dictionary<string, JsonSkeleton> skelDict = new Dictionary<string, JsonSkeleton>();
 
@@ -275,19 +276,20 @@ namespace FFXIV_TexTools2.IO
                     proc.WaitForExit();
                 }
                 skelDict.Clear();
+
                 try
                 {
                     skelDict = ParseSkeleton(skelLoc + sklbName + ".xml", meshList);
                 }
                 catch
                 {
-                    MessageBox.Show("There was an issue reading the skeleton file.\n\nYour AssetCc2.exe may be outdated, version 2012+ is required.", "Save Model Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    FlexibleMessageBox.Show("There was an issue reading the skeleton file.\n\nYour AssetCc2.exe may be outdated, version 2012+ is required.", "SaveModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return false;
                 }
             }
             else if(runAsset && !hasAssetcc)
             {
-                MessageBox.Show("No skeleton found for item. No .dae file will be saved. \n\nPlace AssetCc2(Not provided) in root folder to create skeleton.", "Save Model Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                FlexibleMessageBox.Show("No skeleton found for item. No .dae file will be saved. \n\nPlace AssetCc2(Not provided) in root folder to create skeleton.", "SaveModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
 
@@ -345,7 +347,83 @@ namespace FFXIV_TexTools2.IO
                 fullSkelnum.Clear();
             }
 
-            return true;
+            if(modelData.ExtraData.totalExtraCounts != null && modelData.ExtraData.totalExtraCounts.Count > 0)
+            {
+                using (XmlWriter xmlWriter = XmlWriter.Create(Properties.Settings.Default.Save_Directory + "/" + selectedCategory + "/" + selectedItemName + "/3D/" + modelName + "_Settings.xml", xmlWriterSettings))
+                {
+                    xmlWriter.WriteStartDocument();
+
+                    xmlWriter.WriteComment("Note: Both Fix and DisableHide should not be True, if they are, TexTools will choose Hide over Fix");
+
+                    //<TexTools_Import>
+                    xmlWriter.WriteStartElement("TexTools_Import");
+
+                    //<Model>
+                    xmlWriter.WriteStartElement("Model");
+                    xmlWriter.WriteAttributeString("name", modelName);
+
+                    //<Mesh>
+                    xmlWriter.WriteStartElement("Mesh");
+                    xmlWriter.WriteAttributeString("name", "ALL");
+
+                    //<Fix>
+                    xmlWriter.WriteStartElement("Fix");
+                    xmlWriter.WriteString("false");
+                    xmlWriter.WriteEndElement();
+                    //</Fix>
+
+                    //<Hide>
+                    xmlWriter.WriteStartElement("DisableHide");
+                    xmlWriter.WriteString("false");
+                    xmlWriter.WriteEndElement();
+                    //</Hide>
+
+                    xmlWriter.WriteEndElement();
+                    //</Mesh>
+
+                    foreach(var m in modelData.ExtraData.totalExtraCounts)
+                    {
+
+                        var isBody = modelData.LoD[0].MeshList[m.Key].IsBody;
+                        //<Mesh>
+                        xmlWriter.WriteStartElement("Mesh");
+                        xmlWriter.WriteAttributeString("name", m.Key.ToString());
+                        if (isBody)
+                        {
+                            xmlWriter.WriteAttributeString("type", "Body Mesh");
+                        }
+
+                        //<Fix>
+                        xmlWriter.WriteStartElement("Fix");
+                        xmlWriter.WriteString("false");
+                        xmlWriter.WriteEndElement();
+                        //</Fix>
+
+                        //<Hide>
+                        xmlWriter.WriteStartElement("DisableHide");
+                        xmlWriter.WriteString("false");
+                        xmlWriter.WriteEndElement();
+                        //</Hide>
+
+                        xmlWriter.WriteEndElement();
+                        //</Mesh>
+                    }
+
+                    xmlWriter.WriteEndElement();
+                    //</Model>
+
+
+                    xmlWriter.WriteEndElement();
+                    //</TexTools_Import>
+
+                    xmlWriter.WriteEndDocument();
+
+                    xmlWriter.Flush();
+                }
+            }
+
+
+                return true;
         }
 
         private static void GetSkeleton(string modelName, string category)
@@ -410,7 +488,7 @@ namespace FFXIV_TexTools2.IO
                     }
                     else
                     {
-                        MessageBox.Show("[SaveModel] Unknown Data format (" + format + ") please submit a bug report.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        FlexibleMessageBox.Show("Unknown Data format (" + format + ") please submit a bug report.", "SaveModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 
                         throw new FormatException();
                     }
@@ -598,7 +676,7 @@ namespace FFXIV_TexTools2.IO
 
             var lastBone = fullSkelnum.Last().Value;
 
-            if (skelFileName[0].Equals('m'))
+            if (skelFileName[0].Equals('m') || skelFileName[0].Equals('d'))
             {
                 fullSkel.Clear();
                 fullSkelnum.Clear();

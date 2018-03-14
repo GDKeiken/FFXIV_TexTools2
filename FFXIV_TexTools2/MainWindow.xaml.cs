@@ -15,16 +15,20 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 using FFXIV_TexTools2.Helpers;
+using FFXIV_TexTools2.Model;
 using FFXIV_TexTools2.Resources;
 using FFXIV_TexTools2.ViewModel;
 using FFXIV_TexTools2.Views;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Forms;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Application = System.Windows.Application;
 
 namespace FFXIV_TexTools2
 {
@@ -34,6 +38,15 @@ namespace FFXIV_TexTools2
     public partial class MainWindow : Window
     {
         MainViewModel mViewModel;
+        CategoryViewModel selectedItem;
+
+        List<string> baseRace = new List<string>
+        {
+            {Strings.Hyur_M },
+            {Strings.Hyur_H },
+            {Strings.AuRa_Raen },
+            {Strings.AuRa_Xaela }
+        };
 
         public MainWindow()
         {
@@ -43,68 +56,45 @@ namespace FFXIV_TexTools2
 
             var dxver = Properties.Settings.Default.DX_Ver;
 
-            if(dxver != Strings.DX11 && dxver != Strings.DX9)
+            if (dxver != Strings.DX11 && dxver != Strings.DX9)
             {
                 Properties.Settings.Default.DX_Ver = Strings.DX11;
                 Properties.Settings.Default.Save();
             }
 
-            DXVerStatus.Content = "DX Version: " + dxver.Substring(2);
+            DXVerButton.Content = "DX Version: " + dxver.Substring(2);
+
+            List<System.Windows.Controls.MenuItem> miList = new List<System.Windows.Controls.MenuItem>();
+            foreach(var br in baseRace)
+            {
+                System.Windows.Controls.MenuItem mi = new System.Windows.Controls.MenuItem();
+                mi.Header = br;
+                miList.Add(mi);
+            }
+
+            Default_Race.ItemsSource = miList;
+
+            if (Properties.Settings.Default.Default_Race.Equals(""))
+            {
+                Properties.Settings.Default.Default_Race = Strings.Hyur_M;
+                Properties.Settings.Default.Save();
+            }
+
+            foreach(System.Windows.Controls.MenuItem br in Default_Race.Items)
+            {
+                if (br.Header.Equals(Properties.Settings.Default.Default_Race))
+                {
+                    br.IsChecked = true;
+                    br.IsEnabled = false;
+                }
+                else
+                {
+                    br.IsChecked = false;
+                }
+            }
+
 
             //HavokInterop.InitializeSTA();
-        }
-
-        private void Menu_DX9_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                Properties.Settings.Default.DX_Ver = Strings.DX9;
-                Properties.Settings.Default.Save();
-
-                Menu_DX9.IsEnabled = false;
-                Menu_DX11.IsEnabled = true;
-                Menu_DX11.IsChecked = false;
-
-                DXVerStatus.Content = "DX Version: 9";
-
-                if ((CategoryViewModel)textureTreeView.SelectedItem != null)
-                {
-                    var itemSelected = (CategoryViewModel)textureTreeView.SelectedItem;
-                    ((CategoryViewModel)textureTreeView.SelectedItem).IsSelected = false;
-                    itemSelected.IsSelected = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("[Main] DX Switch Error \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void Menu_DX11_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                Properties.Settings.Default.DX_Ver = Strings.DX11;
-                Properties.Settings.Default.Save();
-
-                Menu_DX11.IsEnabled = false;
-                Menu_DX9.IsEnabled = true;
-                Menu_DX9.IsChecked = false;
-
-                DXVerStatus.Content = "DX Version: 11";
-
-                if ((CategoryViewModel)textureTreeView.SelectedItem != null)
-                {
-                    var itemSelected = (CategoryViewModel)textureTreeView.SelectedItem;
-                    ((CategoryViewModel)textureTreeView.SelectedItem).IsSelected = false;
-                    itemSelected.IsSelected = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("[Main] DX Switch Error \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-
         }
 
         private void Menu_ProblemCheck_Click(object sender, RoutedEventArgs e)
@@ -127,7 +117,7 @@ namespace FFXIV_TexTools2
 
         private void Menu_English_Click(object sender, RoutedEventArgs e)
         {
-            if (MessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change", MessageBoxButton.OKCancel, MessageBoxImage.Information) == MessageBoxResult.OK)
+            if (FlexibleMessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change",MessageBoxButtons.OKCancel,MessageBoxIcon.Information) == System.Windows.Forms.DialogResult.OK)
             {
                 Properties.Settings.Default.Language = "en";
                 Properties.Settings.Default.Save();
@@ -145,7 +135,7 @@ namespace FFXIV_TexTools2
         {
 
 
-            if (MessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change", MessageBoxButton.OKCancel, MessageBoxImage.Information) == MessageBoxResult.OK)
+            if (FlexibleMessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change",MessageBoxButtons.OKCancel,MessageBoxIcon.Information) == System.Windows.Forms.DialogResult.OK)
             {
                 Properties.Settings.Default.Language = "ja";
                 Properties.Settings.Default.Save();
@@ -161,7 +151,7 @@ namespace FFXIV_TexTools2
 
         private void Menu_French_Click(object sender, RoutedEventArgs e)
         {
-            if (MessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change", MessageBoxButton.OKCancel, MessageBoxImage.Information) == MessageBoxResult.OK)
+            if (FlexibleMessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change",MessageBoxButtons.OKCancel,MessageBoxIcon.Information) == System.Windows.Forms.DialogResult.OK)
             {
                 Properties.Settings.Default.Language = "fr";
                 Properties.Settings.Default.Save();
@@ -177,7 +167,7 @@ namespace FFXIV_TexTools2
 
         private void Menu_German_Click(object sender, RoutedEventArgs e)
         {
-            if (MessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change", MessageBoxButton.OKCancel, MessageBoxImage.Information) == MessageBoxResult.OK)
+            if (FlexibleMessageBox.Show("Changing language requires the application to restart. \nRestart now?", "Language Change",MessageBoxButtons.OKCancel,MessageBoxIcon.Information) == System.Windows.Forms.DialogResult.OK)
             {
                 Properties.Settings.Default.Language = "de";
                 Properties.Settings.Default.Save();
@@ -197,11 +187,6 @@ namespace FFXIV_TexTools2
             ml.Show();
         }
 
-        private void Menu_Importer_Click(object sender, RoutedEventArgs e)
-        {
-            //Not yet implemented
-        }
-
         private void Menu_Directories_Click(object sender, RoutedEventArgs e)
         {
             DirectoriesView dv = new DirectoriesView();
@@ -216,7 +201,7 @@ namespace FFXIV_TexTools2
             }
             catch (Exception ex)
             {
-                MessageBox.Show("[Main] Error Accessing .modlist File \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                FlexibleMessageBox.Show("Error Accessing .modlist File \n" + ex.Message, "MainWindow Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
         }
@@ -261,7 +246,7 @@ namespace FFXIV_TexTools2
             }
             catch (Exception ex)
             {
-                MessageBox.Show("[Main] Error Accessing .modlist File \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                FlexibleMessageBox.Show("Error Accessing .modlist File \n" + ex.Message, "MainWindow Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
         }
@@ -274,6 +259,7 @@ namespace FFXIV_TexTools2
         private void textureTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         {
             var item = e.NewValue as CategoryViewModel;
+            selectedItem = item;
             CategoryViewModel topLevel = null;
             if(item!= null)
             {
@@ -314,7 +300,6 @@ namespace FFXIV_TexTools2
                     }
 
                 }
-
             }
             else
             {
@@ -335,11 +320,13 @@ namespace FFXIV_TexTools2
 
             if (!Helper.IsIndexLocked(true))
             {
-                if (MessageBox.Show("Starting over will:\n\n" +
+                var result = FlexibleMessageBox.Show("Starting over will:\n\n" +
                     "Restore index files to their original state.\n" +
                     "Delete all mods and create new .dat files.\n" +
                     "Delete all .modlist file entries.\n\n" +
-                    "Do you want to start over?", "Start Over", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+                    "Do you want to start over?", "Start Over", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+
+                if (result == System.Windows.Forms.DialogResult.Yes)
                 {
 
                     RevertAll();
@@ -376,6 +363,47 @@ namespace FFXIV_TexTools2
                     File.Delete(Properties.Settings.Default.Modlist_Directory);
 
                     MakeModContainers();
+                }
+
+                if (result == System.Windows.Forms.DialogResult.Yes && selectedItem != null)
+                {
+                    CategoryViewModel topLevel = null;
+                    var itemParent = selectedItem.Parent;
+
+                    while (itemParent != null)
+                    {
+                        topLevel = itemParent;
+                        itemParent = itemParent.Parent;
+                    }
+
+                    if (selectedItem.ItemData != null)
+                    {
+                        if (!topLevel.Name.Equals("UI"))
+                        {
+                            mViewModel.TextureVM.UpdateTexture(selectedItem.ItemData, selectedItem.Parent.Name);
+
+                            if (selectedItem.Name.Equals(Strings.Face_Paint) || selectedItem.Name.Equals(Strings.Equipment_Decals))
+                            {
+                                tabControl.SelectedIndex = 0;
+                                if (mViewModel.ModelVM != null)
+                                {
+                                    mViewModel.ModelVM.ModelTabEnabled = false;
+                                }
+                            }
+                            else
+                            {
+                                mViewModel.ModelVM.UpdateModel(selectedItem.ItemData, selectedItem.Parent.Name);
+                                mViewModel.ModelVM.ModelTabEnabled = true;
+                            }
+                        }
+                        else
+                        {
+                            tabControl.SelectedIndex = 0;
+                            mViewModel.TextureVM.UpdateTexture(selectedItem.ItemData, "UI");
+                            mViewModel.ModelVM.ModelTabEnabled = false;
+                        }
+
+                    }
                 }
             }
         }
@@ -432,6 +460,101 @@ namespace FFXIV_TexTools2
         private void Menu_Tutorials_Click(object sender, RoutedEventArgs e)
         {
             System.Diagnostics.Process.Start("http://ffxivtextools.dualwield.net/app_tutorial.html");
+        }
+
+        private void Default_Race_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedMenuItem = (e.OriginalSource as System.Windows.Controls.MenuItem);
+            var selectedRace = selectedMenuItem.Header.ToString();
+
+
+            Properties.Settings.Default.Default_Race = selectedRace;
+            Properties.Settings.Default.Save();
+
+            foreach (System.Windows.Controls.MenuItem br in Default_Race.Items)
+            {
+                if (br.Header.Equals(Properties.Settings.Default.Default_Race))
+                {
+                    br.IsChecked = true;
+                    br.IsEnabled = false;
+                }
+                else
+                {
+                    br.IsChecked = false;
+                    br.IsEnabled = true;
+                }
+            }
+        }
+
+        private void DXVerButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dxver = Properties.Settings.Default.DX_Ver;
+
+            if (dxver.Equals(Strings.DX11))
+            {
+                Properties.Settings.Default.DX_Ver = Strings.DX9;
+                Properties.Settings.Default.Save();
+
+                DXVerButton.Content = "DX Version: 9";
+            }
+            else if (dxver.Equals(Strings.DX9))
+            {
+                Properties.Settings.Default.DX_Ver = Strings.DX11;
+                Properties.Settings.Default.Save();
+
+                DXVerButton.Content = "DX Version: 11";
+            }
+            else
+            {
+                DXVerButton.Content = "DX Version: ERROR";
+            }
+
+            if ((CategoryViewModel)textureTreeView.SelectedItem != null)
+            {
+                var itemSelected = (CategoryViewModel)textureTreeView.SelectedItem;
+                ((CategoryViewModel)textureTreeView.SelectedItem).IsSelected = false;
+                itemSelected.IsSelected = true;
+            }
+        }
+
+        private void PKEmporium_Click(object sender, RoutedEventArgs e)
+        {
+            Process.Start("https://prettykittyemporium.blogspot.com/");
+
+        }
+
+        private void NexusMods_Click(object sender, RoutedEventArgs e)
+        {
+            Process.Start("https://www.nexusmods.com/finalfantasy14");
+
+        }
+
+        private void Menu_MakeModpack_Click(object sender, RoutedEventArgs e)
+        {
+            MakeModPack mmp = new MakeModPack();
+            mmp.Show();
+        }
+
+        private void Menu_ImportModpack_Click(object sender, RoutedEventArgs e)
+        {
+            string mpDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\TexTools\\ModPacks";
+
+            if (!Directory.Exists(mpDir))
+            {
+                Directory.CreateDirectory(mpDir);
+            }
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.InitialDirectory = mpDir;
+            ofd.Filter = "TexTools ModPack (*.ttmp)|*.ttmp";
+
+            if(ofd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                ImportModPack imp = new ImportModPack(ofd.FileName);
+                imp.Show();
+            }
+
+
         }
     }
 }

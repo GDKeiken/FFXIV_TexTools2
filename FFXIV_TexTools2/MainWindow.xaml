@@ -44,27 +44,24 @@
             <ColumnDefinition/>
         </Grid.ColumnDefinitions>
         <StatusBar Height="21" VerticalAlignment="Bottom">
-            <Viewbox>
-                <Label x:Name="DXVerStatus" Content="DX Ver: " Padding="0"/>
-            </Viewbox>
+            <Button x:Name="DXVerButton" Content="DX Ver: 11" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" BorderThickness="0" Background="{x:Null}" Click="DXVerButton_Click"/>
         </StatusBar>
         <Menu x:Name="menu" Height="22" VerticalAlignment="Top">
             <MenuItem Header="Mods">
                 <MenuItem x:Name="Menu_ModList" Header="Mod List" BorderThickness="1" Click="Menu_ModList_Click" IsEnabled="{Binding ModlistOffEnabled}"/>
-                <MenuItem x:Name="Menu_Importer" Header="Importer" HorizontalAlignment="Left" Width="140" Click="Menu_Importer_Click" IsEnabled="False"/>
-                <MenuItem x:Name="Menu_RevertAll" Header="Disable all Mods" Click="Menu_RevertAll_Click" IsEnabled="{Binding ModlistOffEnabled}"/>
-                <MenuItem x:Name="Menu_ReapplyAll" Header="ReEnable All Mods" Click="Menu_ReapplyAll_Click" IsEnabled="{Binding ModlistOffEnabled}"/>
+                <MenuItem x:Name="Menu_MakeModpack" Header="Make ModPack" HorizontalAlignment="Left" Click="Menu_MakeModpack_Click" />
+                <MenuItem x:Name="Menu_ImportModpack" Header="Import ModPack" HorizontalAlignment="Left" Click="Menu_ImportModpack_Click" />
+                <MenuItem x:Name="Menu_RevertAll" Header="Disable All Mods" Click="Menu_RevertAll_Click" IsEnabled="{Binding ModlistOffEnabled}"/>
+                <MenuItem x:Name="Menu_ReapplyAll" Header="Re-enable All Mods" Click="Menu_ReapplyAll_Click" IsEnabled="{Binding ModlistOffEnabled}"/>
             </MenuItem>
             <MenuItem Header="Search" StaysOpenOnClick="True">
                 <MenuItem Header="Model ID" Command="{Binding IDSearchCommand}"/>
             </MenuItem>
             <MenuItem Header="Options" StaysOpenOnClick="True" Height="22">
                 <MenuItem x:Name="Menu_Directories" Header="Directories" Click="Menu_Directories_Click"/>
-                <MenuItem Header="DX Version">
-                    <MenuItem x:Name="Menu_DX9" Header="DX9" HorizontalAlignment="Left" Click="Menu_DX9_Click" IsCheckable="True" IsChecked="{Binding IsDX9, Mode=OneWay}" IsEnabled="{Binding DX9Enabled}"/>
-                    <MenuItem x:Name="Menu_DX11" Header="DX11" HorizontalAlignment="Left" Click="Menu_DX11_Click" IsCheckable="True" IsChecked="{Binding IsDX11, Mode=OneWay}" IsEnabled="{Binding DX11Enabled}"/>
-                </MenuItem>
                 <MenuItem x:Name="Save_All_DDS" Header="Save All DDS" Click="Save_All_DDS_Click" IsEnabled="False"/>
+                <MenuItem x:Name="Default_Race" Header="Default Race" Click="Default_Race_Click" />
+                
             </MenuItem>
             <MenuItem Header="Help">
                 <MenuItem x:Name="Menu_ProblemCheck" Header="Check For Problems" Click="Menu_ProblemCheck_Click"/>
@@ -80,6 +77,10 @@
                 <MenuItem x:Name="Menu_Japanese" Header="Japanese" HorizontalAlignment="Left" Width="140" IsCheckable="True" Click="Menu_Japanese_Click" IsEnabled="{Binding JapaneseEnabled}" IsChecked="{Binding IsJapanese, Mode=OneWay}"/>
                 <MenuItem x:Name="Menu_French" Header="French" HorizontalAlignment="Left" Width="140" IsCheckable="True" Click="Menu_French_Click" IsEnabled="{Binding FrenchEnabled}" IsChecked="{Binding IsFrench, Mode=OneWay}"/>
                 <MenuItem x:Name="Menu_German" Header="German" HorizontalAlignment="Left" Width="140" IsCheckable="True" Click="Menu_German_Click" IsEnabled="{Binding GermanEnabled}" IsChecked="{Binding IsGerman, Mode=OneWay}"/>
+            </MenuItem>
+            <MenuItem Header="Mod Repos">
+                <MenuItem x:Name="PKEmporium" Header="PrettyKitty Emporium" HorizontalAlignment="Left" Click="PKEmporium_Click"/>
+                <MenuItem x:Name="NexusMods" Header="Nexus Mods" HorizontalAlignment="Left" Click="NexusMods_Click"/>
             </MenuItem>
         </Menu>
         <Button Content="Join us on Discord!" VerticalAlignment="Top" HorizontalAlignment="Right" BorderBrush="{x:Null}" Background="{x:Null}" Click="Menu_Discord_Click">

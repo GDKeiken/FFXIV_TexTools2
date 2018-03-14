@@ -169,6 +169,24 @@ namespace FFXIV_TexTools2.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Au Ra Raen.
+        /// </summary>
+        internal static string AuRa_Raen {
+            get {
+                return ResourceManager.GetString("AuRa_Raen", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Au Ra Xaela.
+        /// </summary>
+        internal static string AuRa_Xaela {
+            get {
+                return ResourceManager.GetString("AuRa_Xaela", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Bahamut-Egi.
         /// </summary>
         internal static string Bahamut_Egi {
@@ -363,6 +381,15 @@ namespace FFXIV_TexTools2.Resources {
         internal static string CraftAction {
             get {
                 return ResourceManager.GetString("CraftAction", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to DemiHuman.
+        /// </summary>
+        internal static string DemiHuman {
+            get {
+                return ResourceManager.GetString("DemiHuman", resourceCulture);
             }
         }
         
@@ -777,6 +804,24 @@ namespace FFXIV_TexTools2.Resources {
         internal static string Female {
             get {
                 return ResourceManager.GetString("Female", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Field Marker.
+        /// </summary>
+        internal static string FieldMarker {
+            get {
+                return ResourceManager.GetString("FieldMarker", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to fieldmarker_0_{0}.exd.
+        /// </summary>
+        internal static string FieldMarkerEXD {
+            get {
+                return ResourceManager.GetString("FieldMarkerEXD", resourceCulture);
             }
         }
         

@@ -681,4 +681,19 @@
   <data name="Sephirot_Egi" xml:space="preserve">
     <value>Sephirot-Egi</value>
   </data>
+  <data name="AuRa_Raen" xml:space="preserve">
+    <value>Au Ra Raen</value>
+  </data>
+  <data name="AuRa_Xaela" xml:space="preserve">
+    <value>Au Ra Xaela</value>
+  </data>
+  <data name="FieldMarker" xml:space="preserve">
+    <value>Field Marker</value>
+  </data>
+  <data name="FieldMarkerEXD" xml:space="preserve">
+    <value>fieldmarker_0_{0}.exd</value>
+  </data>
+  <data name="DemiHuman" xml:space="preserve">
+    <value>DemiHuman</value>
+  </data>
 </root>

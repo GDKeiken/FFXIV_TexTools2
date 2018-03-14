@@ -21,10 +21,13 @@ using FFXIV_TexTools2.Resources;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Forms;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -33,7 +36,7 @@ namespace FFXIV_TexTools2.ViewModel
 {
     public class ListViewModel : INotifyPropertyChanged
     {
-        List<ModListModel> mlmList = new List<ModListModel>();
+        ObservableCollection<ModListModel> mlmList = new ObservableCollection<ModListModel>();
         bool _isSelected;
 
         public ListViewModel(string selectedItem)
@@ -52,12 +55,14 @@ namespace FFXIV_TexTools2.ViewModel
             }
             catch (Exception e)
             {
-                MessageBox.Show("[VM] Error Accessing .modlist File \n" + e.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                FlexibleMessageBox.Show("Error Accessing .modlist File \n" + e.Message, "ListViewModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Debug.WriteLine(e.StackTrace);
             }
+
 
         }
 
-        public List<ModListModel> ModList
+        public ObservableCollection<ModListModel> ModList
         {
             get { return mlmList; }
         }
@@ -91,11 +96,17 @@ namespace FFXIV_TexTools2.ViewModel
                 else if (entry.fullPath.Contains("_c_"))
                 {
                     race = race.Substring(race.IndexOf("_c") + 2, 4);
-
                 }
                 else
                 {
-                    race = race.Substring(race.LastIndexOf('c') + 1, 4);
+                    if (entry.fullPath.Contains(".mdl") && entry.fullPath.Contains("_fac"))
+                    {
+                        race = race.Substring(race.IndexOf('c') + 1, 4);
+                    }
+                    else
+                    {
+                        race = race.Substring(race.LastIndexOf('c') + 1, 4);
+                    }
                 }
                 race = Info.IDRace[race];
             }

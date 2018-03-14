@@ -2,43 +2,46 @@
 # FFXIV TexTools 2 by Liinko
 This is a more feature rich WPF implementation of FFXIV TexTools and replaced FFXIV TexTools.
 
-# Current Version: 1.6.1
+# Current Version: 1.8
 ChangeLog:
 
 For previous ChangeLogs visit http://ffxivtextools.dualwield.net/change_log.html
 
 Application:
- - Updated to latest version of Helix Toolkit.
- - Added new steam directory name "FINAL FANTASY XIV Online" to common install directories.
- - Help > Check For Problems now does a more thorough check.
- - Changed .modlist and saved directory to MyDocument/TexTools so that it is shared by all newer version of TexTools.
- - User settings from this version onward should now persist as new versions are released.
- - Help > Report Bug now opens a new link to a public issue tracker.
- - Added a whole bunch of additional safeguards and checks for importing.
- - Added a crash dialog with information that can be copied to clipboard for bug reports.
+ - Added Make ModPack and Import ModPack in the Mods menu for batch export/import.
+ - Added Default Race under Options menu, this will show the selected races texture in 3D view.
+ - Added Mod Repos to the menu.
+ - Added the ability to delete mods from Mod List.
+ - Added version number to error messages
+ - Mod List now supports multi-select (Ctrl + Click) (Shift + Click).
+ - Pets now has separate entries for each version
+ - Removed DX Version from Menu, clicking on the DX Version in the status bar now changes the DX version.
+ - Monsters and DemiHumans now save to their respective folders when saved from Model Search.
  
+Textures:
+ - Added secondary textures for pets
+ - Added Field Markers to UI
+
 3D:
- - Meshes in the .dae file no longer have to be in order when importing.
- - Secondary Texture coorindates now export and import (used for decals/face paints).
- - Extra data used to hide mesh parts when overlaid by another mesh now imports and updates (this should fix a lot of issues).
- - Faces now import correctly.
- - Slight increase in emissive intensity in 3D viewer.
- - Added a notice for the model in Character > Body stating that it is not the default model when unequipped.
- - Added initial support for importing from blender (must use "Better Collada exporter" from here https://github.com/godotengine/collada-exporter)
+ - Added Advanced Importing for 3D models.
+ - An import settings file now exports with 3D models containing extra data.
+ - TexTools will now stay on the same race after importing
+ - Added message when model being imported has indices in the extra data that are out of range.
+ - Added Update TEX button, this will reload the textures on the model.
+ - Changed reflection amount to be within button text.
+ - DemiHuman parts now appear in dropdown menu when selected from Model Search.
+ - Ctrl+R now resets the camera in 3D view
 
 Bug Fixes:
- - Fixed an issue where textures would not appear correctly on 3D model when the texture width was greater than its height.
- - Fixed an issue where the model for Hyur Midlander Female in Charater > Body would not display.
- - Fixed an issue where imported model indices could be read incorrectly under certain circumstances.
- - Fixed an issue where offset was being set to 0 when importing an item with a larger data size than that already in the modlist.
- - Fixed an issue where some exported models had incorrect skinning (eg. Yotsuyu body[9130]), also fixes incorrect skinning on import.
- - Fixed an issue where certain models would not display in 3D (eg. Raubahn[9095]).
- - Fixed an issue where under certain circumstances information would be saved incorrectly to the modlist causing file pointer issues.
- - Other minor bug fixes
-
-Version 1.6.1 Bug Fixes:
- - Fixed an issue where dae files with TexTools authoring tool were not able to be imported.
- - Fixed an issue where certain models with no extra data in mesh 0, but extra data in mesh 1 would not import and cause the application to crash. (eg. Makai Moon Guide's Quartertights)
-
-Not Yet Implemented:
-* Mod Importer
+ - Fixed an issue where Mounts did not appear after patch 4.2
+ - Fixed an issue where the application would not read .dat files higher than 0 for 0a.
+ - Fixed an issue where UI items would not appear unless alpha was checked
+ - Fixed an issue where models in the DemiHuman category would not load when opened from the ModelSearch Window.
+ - Fixed an issue where indices were not being read as unsigned, causing certain models to not fully load.
+ - Fixed an issue where any model in the monster category would not import correctly.
+ - Fixed an issue where models with more than 10 parts would not import correctly.
+ - Fixed an issue where bones weights being imported would not equal to 1 in some cases. (Big thanks to Sel.)
+ - Fixed an issue where bones with 0 weight would cause issue upon reimporting. (Big thanks to Sel.)
+ 
+Known Issues:
+ - Recent hair styles cannot be exported (Needs new skeleton files [Will update soon])

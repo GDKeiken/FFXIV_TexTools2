@@ -22,6 +22,7 @@ using FFXIV_TexTools2.Resources;
 using HelixToolkit.Wpf.SharpDX;
 using HelixToolkit.Wpf.SharpDX.Core;
 using Newtonsoft.Json;
+using SharpDX;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -30,7 +31,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Windows;
+using System.Windows.Forms;
 using System.Xml;
 
 namespace FFXIV_TexTools2.IO
@@ -46,6 +47,10 @@ namespace FFXIV_TexTools2.IO
 		/// This amount is added to the offset when reading and subtracted from the offset when writing
 		/// </remarks>
 		public static int DatOffsetAmount = 64;
+
+		static Dictionary<int, int> nVertDict = new Dictionary<int, int>();
+		static Dictionary<string, ImportSettings> importSettings = new Dictionary<string, ImportSettings>();
+
 
 
 		public static int ImportOBJ(string category, string itemName, string modelName, string selectedMesh, string internalPath)
@@ -96,9 +101,53 @@ namespace FFXIV_TexTools2.IO
 		}
 
 
-		public static void ImportDAE(string category, string itemName, string modelName, string selectedMesh, string internalPath, List<string> boneStrings, ModelData modelData)
+		public static void ImportDAE(string category, string itemName, string modelName, string selectedMesh, string internalPath, List<string> boneStrings, ModelData modelData, Dictionary<string, ImportSettings> settings)
 		{
+			importSettings = settings;
+
 			var savePath = Properties.Settings.Default.Save_Directory + "/" + category + "/" + itemName + "/3D/" + modelName + ".DAE";
+
+			if (importSettings != null)
+			{
+				savePath = importSettings[Strings.All].path;
+			}
+
+			var settingsFile = Path.Combine(Path.GetDirectoryName(savePath), Path.GetFileNameWithoutExtension(savePath) + "_Settings.xml");
+
+			if (importSettings == null && File.Exists(settingsFile))
+			{
+				importSettings = new Dictionary<string, ImportSettings>();
+				using (XmlReader reader = XmlReader.Create(settingsFile))
+				{
+					while (reader.Read())
+					{
+						if (reader.IsStartElement())
+						{
+							if (reader.Name.Equals("Mesh"))
+							{
+								var name = reader["name"];
+								importSettings.Add(name, new ImportSettings());
+								while (reader.Read())
+								{
+									if (reader.IsStartElement())
+									{
+										if (reader.Name.Contains("Fix"))
+										{
+											importSettings[name].Fix = bool.Parse(reader.ReadElementContentAsString().ToLower());
+										}
+
+										if (reader.Name.Contains("DisableHide"))
+										{
+											importSettings[name].Disable = bool.Parse(reader.ReadElementContentAsString().ToLower());
+											break;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 
 			var numMeshes = modelData.LoD[0].MeshCount;
 
@@ -108,9 +157,7 @@ namespace FFXIV_TexTools2.IO
 
 				Dictionary<int, Dictionary<int, ColladaData>> pDict = new Dictionary<int, Dictionary<int, ColladaData>>();
 
-
-
-                for (int i = 0; i < numMeshes; i++)
+				for (int i = 0; i < numMeshes; i++)
 				{
 					cdDict.Add(i, new ColladaData());
 					pDict.Add(i, new Dictionary<int, ColladaData>());
@@ -126,7 +173,6 @@ namespace FFXIV_TexTools2.IO
 				string tang = "-textangents";
 				int tcStride = 2;
 				int indStride = 4;
-				bool hasTexc2 = false;
 				bool blender = false;
 
 				using (XmlReader reader = XmlReader.Create(savePath))
@@ -161,13 +207,13 @@ namespace FFXIV_TexTools2.IO
 
 				if(boneJointDict.Count < 1)
 				{
-					MessageBox.Show("[Import] No bones were found in the .dae file.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+					FlexibleMessageBox.Show("No bones were found in the .dae file.", "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 					return;
 				}
 
 				Dictionary<string, int> boneDict = new Dictionary<string, int>();
 				Dictionary<string, string> meshNameDict = new Dictionary<string, string>();
-                List<string> extraBones = new List<string>();
+				List<string> extraBones = new List<string>();
 
 				for (int i = 0; i < boneStrings.Count; i++)
 				{
@@ -176,331 +222,352 @@ namespace FFXIV_TexTools2.IO
 
 				try
 				{
-                    using (XmlReader reader = XmlReader.Create(savePath))
-                    {
-                        while (reader.Read())
-                        {
-                            if (reader.IsStartElement())
-                            {
-                                if (reader.Name.Contains("authoring_tool"))
-                                {
-                                    var tool = reader.ReadElementContentAsString();
+					using (XmlReader reader = XmlReader.Create(savePath))
+					{
+						while (reader.Read())
+						{
+							if (reader.IsStartElement())
+							{
+								if (reader.Name.Contains("authoring_tool"))
+								{
+									var tool = reader.ReadElementContentAsString();
 
-                                    if (tool.Contains("OpenCOLLADA"))
-                                    {
-                                        texc = "-map1-array";
-                                        texc2 = "-map2-array";
-                                        biNorm = "-map1-texbinormals";
-                                        tang = "-map1-textangents";
-                                        tcStride = 3;
-                                        indStride = 6;
-                                    }
-                                    else if (tool.Contains("FBX"))
-                                    {
-                                        pos = "-position-array";
-                                        norm = "-normal0-array";
-                                        texc = "-uv0-array";
-                                        texc2 = "-uv1-array";
-                                    }
-                                    else if (tool.Contains("Exporter for Blender"))
-                                    {
-                                        biNorm = "-bitangents-array";
-                                        tang = "-tangents-array";
-                                        texc = "-texcoord-0-array";
-                                        texc2 = "-texcoord-1-array";
-                                        indStride = 1;
-                                        blender = true;
-                                    }
-                                    else if (!tool.Contains("TexTools"))
-                                    {
-                                        MessageBox.Show("Unsupported Authoring Tool\n\n" +
-                                            tool +
-                                            "\n\nCurrently supported tools are:\n" +
-                                            "* 3DS Max with default(FBX) or OpenCOLLADA plugin\n" +
-                                            "* Blender with \"Better\" Collada exporter plugin\n\n" +
-                                            "If you'd like to get another tool supported, submit a request.", "Unsupported File", MessageBoxButton.OK, MessageBoxImage.Error);
-                                        return;
-                                    }
-                                }
+									if (tool.Contains("OpenCOLLADA"))
+									{
+										texc = "-map1-array";
+										texc2 = "-map2-array";
+										biNorm = "-map1-texbinormals";
+										tang = "-map1-textangents";
+										tcStride = 3;
+										indStride = 6;
+									}
+									else if (tool.Contains("FBX"))
+									{
+										pos = "-position-array";
+										norm = "-normal0-array";
+										texc = "-uv0-array";
+										texc2 = "-uv1-array";
+									}
+									else if (tool.Contains("Exporter for Blender"))
+									{
+										biNorm = "-bitangents-array";
+										tang = "-tangents-array";
+										texc = "-texcoord-0-array";
+										texc2 = "-texcoord-1-array";
+										indStride = 1;
+										blender = true;
+									}
+									else if (!tool.Contains("TexTools"))
+									{
+										FlexibleMessageBox.Show("Unsupported Authoring Tool\n\n" +
+											tool +
+											"\n\nCurrently supported tools are:\n" +
+											"* 3DS Max with default(FBX) or OpenCOLLADA plugin\n" +
+											"* Blender with \"Better\" Collada exporter plugin\n\n" +
+											"If you'd like to get another tool supported, submit a request.", "Unsupported File " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+										return;
+									}
+								}
 
-                                //go to geometry element
-                                if (reader.Name.Equals("geometry"))
-                                {
-                                    var atr = reader["name"];
-                                    var id = reader["id"];
+								//go to geometry element
+								if (reader.Name.Equals("geometry"))
+								{
+									var atr = reader["name"];
+									var id = reader["id"];
 
-                                    meshNameDict.Add(id, atr);
+									meshNameDict.Add(id, atr);
 
-                                    var meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, 1));
+									var meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, 1));
 
-                                    // var cData = cdDict[meshNum];
-                                    var cData = new ColladaData();
+									if (atr.Contains("."))
+									{
+										meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, atr.LastIndexOf(".") - (atr.LastIndexOf("_") + 1)));
+									}
 
-                                    while (reader.Read())
-                                    {
-                                        if (reader.IsStartElement())
-                                        {
-                                            if (reader.Name.Contains("float_array"))
-                                            {
-                                                //Vertex 
-                                                if (reader["id"].ToLower().Contains(pos))
-                                                {
-                                                    cData.vertex.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
-                                                }
-                                                //Normals
-                                                else if (reader["id"].ToLower().Contains(norm) && cData.vertex.Count > 0)
-                                                {
-                                                    cData.normal.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
-                                                }
-                                                //Texture Coordinates
-                                                else if (reader["id"].ToLower().Contains(texc) && cData.vertex.Count > 0)
-                                                {
-                                                    cData.texCoord.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
-                                                }
-                                                //Texture Coordinates2
-                                                else if (reader["id"].ToLower().Contains(texc2) && cData.vertex.Count > 0)
-                                                {
-                                                    hasTexc2 = true;
-                                                    cData.texCoord2.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
-                                                }
-                                                //Tangents
-                                                else if (reader["id"].ToLower().Contains(tang) && cData.vertex.Count > 0)
-                                                {
-                                                    cData.tangent.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
-                                                }
-                                                //BiNormals
-                                                else if (reader["id"].ToLower().Contains(biNorm) && cData.vertex.Count > 0)
-                                                {
-                                                    cData.biNormal.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
-                                                }
-                                            }
-                                            //Indices
-                                            if (reader.Name.Equals("p"))
-                                            {
-                                                cData.index.AddRange((int[])reader.ReadElementContentAs(typeof(int[]), null));
+									var cData = new ColladaData();
 
-                                                if (!hasTexc2 && indStride == 6)
-                                                {
-                                                    indStride = 4;
-                                                }
+									while (reader.Read())
+									{
+										if (reader.IsStartElement())
+										{
+											if (reader.Name.Contains("float_array"))
+											{
+												//Vertex 
+												if (reader["id"].ToLower().Contains(pos))
+												{
+													cData.vertex.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
+												}
+												//Normals
+												else if (reader["id"].ToLower().Contains(norm) && cData.vertex.Count > 0)
+												{
+													cData.normal.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
+												}
+												//Texture Coordinates
+												else if (reader["id"].ToLower().Contains(texc) && cData.vertex.Count > 0)
+												{
+													cData.texCoord.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
+												}
+												//Texture Coordinates2
+												else if (reader["id"].ToLower().Contains(texc2) && cData.vertex.Count > 0)
+												{
+													cData.texCoord2.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
+												}
+												//Tangents
+												else if (reader["id"].ToLower().Contains(tang) && cData.vertex.Count > 0)
+												{
+													cData.tangent.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
+												}
+												//BiNormals
+												else if (reader["id"].ToLower().Contains(biNorm) && cData.vertex.Count > 0)
+												{
+													cData.biNormal.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
+												}
+											}
+											//Indices
+											if (reader.Name.Equals("p"))
+											{
+												cData.index.AddRange((int[])reader.ReadElementContentAs(typeof(int[]), null));
 
-                                                for (int i = 0; i < cData.index.Count; i += indStride)
-                                                {
-                                                    cData.vIndexList.Add(cData.index[i]);
-                                                    cData.nIndexList.Add(cData.index[i + 1]);
-                                                    cData.tcIndexList.Add(cData.index[i + 2]);
+												if (cData.texCoord2.Count < 1 && indStride == 6)
+												{
+													indStride = 4;
+												}
 
-                                                    if (hasTexc2 && indStride == 6)
-                                                    {
-                                                        cData.tc2IndexList.Add(cData.index[i + 4]);
-                                                    }
-                                                    else if (hasTexc2 && indStride == 4)
-                                                    {
-                                                        cData.tc2IndexList.Add(cData.index[i + 2]);
-                                                    }
+												for (int i = 0; i < cData.index.Count; i += indStride)
+												{
+													cData.vIndexList.Add(cData.index[i]);
+													cData.nIndexList.Add(cData.index[i + 1]);
+													cData.tcIndexList.Add(cData.index[i + 2]);
 
-                                                    if (cData.biNormal.Count > 0)
-                                                    {
-                                                        cData.bnIndexList.Add(cData.index[i + 3]);
-                                                    }
+													if (cData.texCoord2.Count > 0 && indStride == 6)
+													{
+														cData.tc2IndexList.Add(cData.index[i + 4]);
+													}
+													else if (cData.texCoord2.Count > 0 && indStride == 4)
+													{
+														cData.tc2IndexList.Add(cData.index[i + 2]);
+													}
 
-                                                }
+													if (cData.biNormal.Count > 0)
+													{
+														cData.bnIndexList.Add(cData.index[i + 3]);
+													}
 
-                                                break;
-                                            }
-                                        }
-                                    }
+												}
 
-                                    if (atr.Contains("."))
-                                    {
-                                        var num = atr.Substring(atr.LastIndexOf(".") + 1, atr.Length - (atr.LastIndexOf(".") + 1));
-                                        pDict[meshNum].Add(int.Parse(num), cData);
-                                    }
-                                    else
-                                    {
-                                        pDict[meshNum].Add(0, cData);
-                                    }
-                                }
-                                //go to controller element
-                                else if (reader.Name.Equals("controller"))
-                                {
-                                    var atr = reader["id"];
-                                    var meshNumPart = 0;
-                                    ColladaData cData;
+												break;
+											}
+										}
+									}
 
-                                    if (blender)
-                                    {
-                                        while (reader.Read())
-                                        {
-                                            if (reader.IsStartElement())
-                                            {
-                                                if (reader.Name.Equals("skin"))
-                                                {
-                                                    var skinSource = reader["source"];
-                                                    atr = meshNameDict[skinSource.Substring(1, skinSource.Length - 1)];
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
+									if (atr.Contains("."))
+									{
+										var num = atr.Substring(atr.LastIndexOf(".") + 1);
+										pDict[meshNum].Add(int.Parse(num), cData);
+									}
+									else
+									{
+										pDict[meshNum].Add(0, cData);
+									}
+								}
+								//go to controller element
+								else if (reader.Name.Equals("controller"))
+								{
+									var atr = reader["id"];
+									var meshNumPart = 0;
+									ColladaData cData;
 
-                                    var meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, 1));
+									if (blender)
+									{
+										while (reader.Read())
+										{
+											if (reader.IsStartElement())
+											{
+												if (reader.Name.Equals("skin"))
+												{
+													var skinSource = reader["source"];
+													atr = meshNameDict[skinSource.Substring(1, skinSource.Length - 1)];
+													break;
+												}
+											}
+										}
+									}
 
-                                    var mDict = pDict[meshNum];
+									var meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, 1));
 
-                                    if (atr.Contains("."))
-                                    {
-                                        meshNumPart = int.Parse(atr.Substring(atr.LastIndexOf(".") + 1, 1));
-                                        cData = mDict[meshNumPart];
-                                    }
-                                    else
-                                    {
-                                        cData = mDict[0];
-                                    }
+									if (atr.Contains("."))
+									{
+										meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, atr.LastIndexOf(".") - (atr.LastIndexOf("_") + 1)));
+									}
 
-                                    while (reader.Read())
-                                    {
-                                        if (reader.IsStartElement())
-                                        {
+									var mDict = pDict[meshNum];
 
-                                            if (reader.Name.Contains("Name_array"))
-                                            {
-                                                cData.bones = (string[])reader.ReadElementContentAs(typeof(string[]), null);
-                                            }
+									if (atr.Contains("."))
+									{
+										meshNumPart = int.Parse(atr.Substring((atr.LastIndexOf(".") + 1), atr.LastIndexOf("-") - (atr.LastIndexOf(".") + 1)));
+										cData = mDict[meshNumPart];
+									}
+									else
+									{
+										cData = mDict[0];
+									}
 
-                                            if (reader.Name.Contains("float_array"))
-                                            {
-                                                //Blend Weight
-                                                if (reader["id"].ToLower().Contains("weights-array"))
-                                                {
-                                                    cData.weights.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
-                                                }
-                                            }
-                                            //Blend counts
-                                            else if (reader.Name.Equals("vcount"))
-                                            {
-                                                cData.vCount.AddRange((int[])reader.ReadElementContentAs(typeof(int[]), null));
-                                            }
-                                            //Blend Indices
-                                            else if (reader.Name.Equals("v"))
-                                            {
-                                                var tempbIndex = (int[])reader.ReadElementContentAs(typeof(int[]), null);
+									while (reader.Read())
+									{
+										if (reader.IsStartElement())
+										{
 
-                                                for (int a = 0; a < tempbIndex.Length; a += 2)
-                                                {
-                                                    var blend = tempbIndex[a];
-                                                    var blendName = cData.bones[blend];
-                                                    var blendBoneName = boneJointDict[blendName];
+											if (reader.Name.Contains("Name_array"))
+											{
+												cData.bones = (string[])reader.ReadElementContentAs(typeof(string[]), null);
+											}
 
-                                                    var bString = blendBoneName;
-                                                    if (!blendBoneName.Contains("h0"))
-                                                    {
-                                                        bString = Regex.Replace(blendBoneName, @"[\d]", string.Empty);
-                                                    }
+											if (reader.Name.Contains("float_array"))
+											{
+												//Blend Weight
+												if (reader["id"].ToLower().Contains("weights-array"))
+												{
+													cData.weights.AddRange((float[])reader.ReadElementContentAs(typeof(float[]), null));
+												}
+											}
+											//Blend counts
+											else if (reader.Name.Equals("vcount"))
+											{
+												cData.vCount.AddRange((int[])reader.ReadElementContentAs(typeof(int[]), null));
+											}
+											//Blend Indices
+											else if (reader.Name.Equals("v"))
+											{
+												var tempbIndex = (int[])reader.ReadElementContentAs(typeof(int[]), null);
 
-                                                    if (!boneDict.ContainsKey(bString))
-                                                    {
-                                                        if (!extraBones.Contains(bString))
-                                                        {
-                                                            extraBones.Add(bString);
-                                                        }
-                                                    }
-                                                    else
-                                                    {
-                                                        cData.bIndex.Add(boneDict[bString]);
-                                                        cData.bIndex.Add(tempbIndex[a + 1]);
-                                                    }
-                                                }
+												for (int a = 0; a < tempbIndex.Length; a += 2)
+												{
+													var blend = tempbIndex[a];
+													var blendName = cData.bones[blend];
+													var blendBoneName = boneJointDict[blendName];
 
-                                                if(extraBones.Count > 0)
-                                                {
-                                                    throw new KeyNotFoundException();
-                                                }
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+													var bString = blendBoneName;
+													if (!blendBoneName.Contains("h0"))
+													{
+														bString = Regex.Replace(blendBoneName, @"[\d]", string.Empty);
+													}
+
+													if (!boneDict.ContainsKey(bString))
+													{
+														if (!extraBones.Contains(bString))
+														{
+															extraBones.Add(bString);
+														}
+													}
+													else
+													{
+														cData.bIndex.Add(boneDict[bString]);
+														cData.bIndex.Add(tempbIndex[a + 1]);
+													}
+												}
+
+												if(extraBones.Count > 0)
+												{
+													throw new KeyNotFoundException();
+												}
+												break;
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
 				catch(Exception e)
 				{
+					Debug.WriteLine(e.StackTrace);
+					if(extraBones.Count > 0)
+					{
+						string bones = "";
+						foreach(var b in extraBones)
+						{
+							bones += "* " + b + "\n";
+						}
 
-                    if(extraBones.Count > 0)
-                    {
-                        string bones = "";
-                        foreach(var b in extraBones)
-                        {
-                            bones += "* " + b + "\n";
-                        }
+					   FlexibleMessageBox.Show("TexTools detected bones that are not part of the original model.\n" +
+							"Importing extra bones is not supported, delete the extra bones and try importing again.\n\nExtra Bone(s):\n" + bones, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-                        MessageBox.Show("TexTools detected bones that are not part of the original model.\n" +
-                            "Importing extra bones is not supported, delete the extra bones and try importing again.\n\nExtra Bone(s):\n" + bones, "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
-
-                    }
-                    else
-                    {
-                        MessageBox.Show("Error reading .dae file.\n" + e.Message, "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
+					}
+					else
+					{
+						FlexibleMessageBox.Show("Error reading .dae file.\n" + e.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+					}
 					return;
 				}
 
-				if (!hasTexc2 && indStride == 6)
-				{
-					indStride = 4;
-				}
+				bool passfail = false;
 
-                for(int i = 0; i < pDict.Count; i++)
-                {
-                    var mDict = pDict[i];
-
-                    for (int j = 0; j < mDict.Count; j++)
-                    {
-                        if (mDict.ContainsKey(j))
-                        {
-                            if(mDict[j].texCoord.Count < 1)
-                            {
-                                MessageBox.Show("TexTools detected missing Texture Coordinates for:\nMesh: " + i + " Part: " + j 
-                                    + "\n\nPlease check your model before importing again.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                                return;
-                            }
-
-                            if (mDict[j].weights.Count < 1)
-                            {
-                                MessageBox.Show("TexTools detected missing Bone Data for:\nMesh: " + i + " Part: " + j
-                                    + "\n\nPlease check your model before importing again.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                                return;
-                            }
-                        }
-                    }
-                }
-
-
-
-                for (int i = 0; i < pDict.Count; i++)
+				for(int i = 0; i < pDict.Count; i++)
 				{
 					var mDict = pDict[i];
 
-                    var lastIndex = 0;
-                    List<int> bInList = new List<int>();
+					for (int j = 0; j < mDict.Count; j++)
+					{
+						if (mDict.ContainsKey(j))
+						{
+							if (mDict[j].texCoord.Count < 1)
+							{
+								FlexibleMessageBox.Show("TexTools detected missing Texture Coordinates for:\nMesh: " + i + " Part: " + j
+									+ "\n\nPlease check your model before importing again.", "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+								return;
+							}
 
-                    int c = 0;
-                    int vMax = 0;
-                    int nMax = 0;
-                    int tcMax = 0;
-                    int tc2Max = 0;
-                    int bnMax = 0;
+							if (mDict[j].weights.Count < 1)
+							{
+								FlexibleMessageBox.Show("TexTools detected missing Bone Weight Data for:\nMesh: " + i + " Part: " + j
+									+ "\n\nPlease check your model before importing again.", "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+								return;
 
-                    if (mDict.Count > 0)
+							}
+
+							if (mDict[j].bIndex.Count < 1)
+							{
+								FlexibleMessageBox.Show("TexTools detected missing Bone Index Data for:\nMesh: " + i + " Part: " + j
+									+ "\n\nPlease check your model before importing again.", "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+								return;
+							}
+						}
+					}
+				}
+
+				if (passfail)
+				{
+					return;
+				}
+
+				for (int i = 0; i < pDict.Count; i++)
+				{
+					var mDict = pDict[i];
+
+					var lastIndex = 0;
+					List<int> bInList = new List<int>();
+
+					int c = 0;
+					int vMax = 0;
+					int nMax = 0;
+					int tcMax = 0;
+					int tc2Max = 0;
+					int bnMax = 0;
+
+					if (mDict.Count > 0)
 					{
 						for (int j = 0; j < mDict.Count; j++)
 						{
-                            if (!mDict.ContainsKey(c))
-                            {
+							while (!mDict.ContainsKey(c))
+							{
 								cdDict[i].partsDict.Add(c, 0);
 								c++;
+							}
+
+							if(mDict[c].texCoord2.Count < 1 && indStride == 6)
+							{
+								indStride = 4;
 							}
 
 							cdDict[i].vertex.AddRange(mDict[c].vertex);
@@ -510,38 +577,38 @@ namespace FFXIV_TexTools2.IO
 							cdDict[i].tangent.AddRange(mDict[c].tangent);
 							cdDict[i].biNormal.AddRange(mDict[c].biNormal);
 
-                            for(int k = 0; k < mDict[c].vIndexList.Count; k++)
-                            {
-                                cdDict[i].index.Add(mDict[c].vIndexList[k] + vMax);
-                                cdDict[i].index.Add(mDict[c].nIndexList[k] + nMax);
-                                cdDict[i].index.Add(mDict[c].tcIndexList[k] + tcMax);
+							for(int k = 0; k < mDict[c].vIndexList.Count; k++)
+							{
+								cdDict[i].index.Add(mDict[c].vIndexList[k] + vMax);
+								cdDict[i].index.Add(mDict[c].nIndexList[k] + nMax);
+								cdDict[i].index.Add(mDict[c].tcIndexList[k] + tcMax);
 
-                                if (hasTexc2)
-                                {
-                                    cdDict[i].index.Add(mDict[c].tc2IndexList[k] + tc2Max);
-                                }
+								if (mDict[c].texCoord2.Count > 0)
+								{
+									cdDict[i].index.Add(mDict[c].tc2IndexList[k] + tc2Max);
+								}
 
-                                if(mDict[c].biNormal.Count > 0)
-                                {
-                                    cdDict[i].index.Add(mDict[c].bnIndexList[k] + bnMax);
-                                }
-                            }
+								if(mDict[c].biNormal.Count > 0)
+								{
+									cdDict[i].index.Add(mDict[c].bnIndexList[k] + bnMax);
+								}
+							}
 
-                            vMax += mDict[c].vIndexList.Max() + 1;
-                            nMax += mDict[c].nIndexList.Max() + 1;
-                            tcMax += mDict[c].tcIndexList.Max() + 1;
+							vMax += mDict[c].vIndexList.Max() + 1;
+							nMax += mDict[c].nIndexList.Max() + 1;
+							tcMax += mDict[c].tcIndexList.Max() + 1;
 
-                            if (hasTexc2)
-                            {
-                                tc2Max += mDict[c].tc2IndexList.Max() + 1;
-                            }
+							if (mDict[c].texCoord2.Count > 0)
+							{
+								tc2Max += mDict[c].tc2IndexList.Max() + 1;
+							}
 
-                            if(mDict[c].biNormal.Count > 0)
-                            {
-                                bnMax += mDict[c].bnIndexList.Max() + 1;
-                            }
+							if(mDict[c].biNormal.Count > 0)
+							{
+								bnMax += mDict[c].bnIndexList.Max() + 1;
+							}
 
-                            cdDict[i].partsDict.Add(c, mDict[c].index.Count / indStride);
+							cdDict[i].partsDict.Add(c, mDict[c].index.Count / indStride);
 
 							cdDict[i].weights.AddRange(mDict[c].weights);
 							cdDict[i].vCount.AddRange(mDict[c].vCount);
@@ -608,7 +675,7 @@ namespace FFXIV_TexTools2.IO
 
 					for (int i = 0; i < cd.vertex.Count; i += 3)
 					{
-                        Vertex.Add(new SharpDX.Vector3((cd.vertex[i] / Info.modelMultiplier), (cd.vertex[i + 1] / Info.modelMultiplier), (cd.vertex[i + 2] / Info.modelMultiplier)));
+						Vertex.Add(new SharpDX.Vector3((cd.vertex[i] / Info.modelMultiplier), (cd.vertex[i + 1] / Info.modelMultiplier), (cd.vertex[i + 2] / Info.modelMultiplier)));
 					}
 
 					for (int i = 0; i < cd.normal.Count; i += 3)
@@ -651,161 +718,206 @@ namespace FFXIV_TexTools2.IO
 					var bld = modelData.BoneSet[m];
 
 
-                    for (int i = 0; i < bld.BoneCount; i++)
-                    {
-                        blDict.Add(bld.BoneData[i], i);
-                    }
-
-                    try
-                    {
-                        for (int i = 0; i < Vertex.Count; i++)
-                        {
-                            int bCount = cd.vCount[i];
-
-                            if (bCount > 4)
-                            {
-                                errorDict.Add(i, bCount);
-                            }
-
-                            List<byte> biList = new List<byte>();
-                            List<byte> bwList = new List<byte>();
-
-                            for (int j = 0; j < bCount * 2; j += 2)
-                            {
-                                var b = cd.bIndex[vTrack * 2 + j];
-                                var bi = (byte)blDict[b];
-                                var bw = (byte)Math.Round(cd.weights[cd.bIndex[vTrack * 2 + j + 1]] * 255f);
-
-                                biList.Add(bi);
-                                bwList.Add(bw);
-                            }
-
-                            if (bCount < 4)
-                            {
-                                int remainder = 4 - bCount;
-
-                                for (int k = 0; k < remainder; k++)
-                                {
-                                    biList.Add(0);
-                                    bwList.Add(0);
-                                }
-                            }
-                            else if (bCount > 4)
-                            {
-                                int extras = bCount - 4;
-
-                                for (int k = 0; k < extras; k++)
-                                {
-                                    var min = bwList.Min();
-                                    var minIndex = bwList.IndexOf(min);
-
-                                    bwList.Remove(min);
-                                    biList.RemoveAt(minIndex);
-                                }
-                            }
-
-                            blendIndices.Add(biList.ToArray());
-                            blendWeights.Add(bwList.ToArray());
-                            vTrack += bCount;
-                        }
-                    }
-                    catch
-                    {
-                        MessageBox.Show("TexTools detected that mesh " + m + " refrences bones that were not originally part of that mesh.\n\n" +
-                            "This may cause things to not look correct in-game, but will most likely be fine.\n\n" +
-                            "TexTools will now continue importing.", "Mesh Import Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
-
-                        vTrack = 0;
-                        blDict.Clear();
-                        errorDict.Clear();
-                        blendIndices.Clear();
-                        blendWeights.Clear();
-
-                        bld = modelData.BoneSet[0];
-
-                        for (int i = 0; i < bld.BoneCount; i++)
-                        {
-                            blDict.Add(bld.BoneData[i], i);
-                        }
-
-                        for (int i = 0; i < Vertex.Count; i++)
-                        {
-                            int bCount = cd.vCount[i];
-
-                            if (bCount > 4)
-                            {
-                                errorDict.Add(i, bCount);
-                            }
-
-                            List<byte> biList = new List<byte>();
-                            List<byte> bwList = new List<byte>();
-
-                            for (int j = 0; j < bCount * 2; j += 2)
-                            {
-                                var b = cd.bIndex[vTrack * 2 + j];
-                                var bi = (byte)blDict[b];
-                                var bw = (byte)Math.Round(cd.weights[cd.bIndex[vTrack * 2 + j + 1]] * 255f);
-
-                                biList.Add(bi);
-                                bwList.Add(bw);
-                            }
-
-                            if (bCount < 4)
-                            {
-                                int remainder = 4 - bCount;
-
-                                for (int k = 0; k < remainder; k++)
-                                {
-                                    biList.Add(0);
-                                    bwList.Add(0);
-                                }
-                            }
-                            else if (bCount > 4)
-                            {
-                                int extras = bCount - 4;
-
-                                for (int k = 0; k < extras; k++)
-                                {
-                                    var min = bwList.Min();
-                                    var minIndex = bwList.IndexOf(min);
-
-                                    bwList.Remove(min);
-                                    biList.RemoveAt(minIndex);
-                                }
-                            }
-
-                            blendIndices.Add(biList.ToArray());
-                            blendWeights.Add(bwList.ToArray());
-                            vTrack += bCount;
-                        }
-
-                    }
-
+					for (int i = 0; i < bld.BoneCount; i++)
+					{
+						blDict.Add(bld.BoneData[i], i);
+					}
 
 					try
 					{
+						for (int i = 0; i < Vertex.Count; i++)
+						{
+							int bCount = cd.vCount[i];
 
+							int boneSum = 0;
+
+							List<byte> biList = new List<byte>();
+							List<byte> bwList = new List<byte>();
+
+							int newbCount = 0;
+							for (int j = 0; j < bCount * 2; j += 2)
+							{
+								var b = cd.bIndex[vTrack * 2 + j];
+								var bi = (byte)blDict[b];
+								var bw = (byte)Math.Round(cd.weights[cd.bIndex[vTrack * 2 + j + 1]] * 255f);
+
+								if (bw != 0)
+								{
+									biList.Add(bi);
+									bwList.Add(bw);
+									boneSum += bw;
+									newbCount++;
+								}
+
+							}
+							int originalbCount = bCount;
+							bCount = newbCount;
+
+							if (bCount < 4)
+							{
+								int remainder = 4 - bCount;
+
+								for (int k = 0; k < remainder; k++)
+								{
+									biList.Add(0);
+									bwList.Add(0);
+								}
+							}
+							else if (bCount > 4)
+							{
+								int extras = bCount - 4;
+
+								for (int k = 0; k < extras; k++)
+								{
+									var min = bwList.Min();
+									var minIndex = bwList.IndexOf(min);
+									int count = (bwList.Count(x => x == min));
+									bwList.Remove(min);
+									biList.RemoveAt(minIndex);
+									boneSum -= min;
+								}
+							}
+
+							if (boneSum != 255)
+							{
+								int diff = boneSum - 255;
+								var max = bwList.Max();
+								var maxIndex = bwList.IndexOf(max);
+								errorDict.Add(i, diff);
+								if (diff < 0)
+								{
+									bwList[maxIndex] += (byte)Math.Abs(diff);
+								}
+								else
+								{
+									// Subtract difference when over-weight.
+									bwList[maxIndex] -= (byte)Math.Abs(diff);
+								}
+							}
+
+							boneSum = 0;
+							bwList.ForEach(x => boneSum += x);
+
+							blendIndices.Add(biList.ToArray());
+							blendWeights.Add(bwList.ToArray());
+							vTrack += originalbCount;
+						}
 					}
-					catch(Exception e)
+					catch
 					{
-						MessageBox.Show("[Import] Error reading skinning data.\nPlease make sure the skinning data was saved to the .dae file.\n\n" + e.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-						Debug.WriteLine(e.StackTrace);
-						return;
-					}
+					   FlexibleMessageBox.Show("TexTools detected that mesh " + m + " refrences bones that were not originally part of that mesh.\n\n" +
+							"This may cause things to not look correct in-game, but will most likely be fine.\n\n" +
+							"TexTools will now continue importing.", "Mesh Import Warning",MessageBoxButtons.OK,MessageBoxIcon.Warning);
 
+						vTrack = 0;
+						blDict.Clear();
+						errorDict.Clear();
+						blendIndices.Clear();
+						blendWeights.Clear();
+
+						//use the boneset for mesh 0 
+						bld = modelData.BoneSet[0];
+
+						for (int i = 0; i < bld.BoneCount; i++)
+						{
+							blDict.Add(bld.BoneData[i], i);
+						}
+
+						for (int i = 0; i < Vertex.Count; i++)
+						{
+							int bCount = cd.vCount[i];
+
+							int boneSum = 0;
+
+							List<byte> biList = new List<byte>();
+							List<byte> bwList = new List<byte>();
+
+							int newbCount = 0;
+							for (int j = 0; j < bCount * 2; j += 2)
+							{
+								var b = cd.bIndex[vTrack * 2 + j];
+								var bi = (byte)blDict[b];
+								var bw = (byte)Math.Round(cd.weights[cd.bIndex[vTrack * 2 + j + 1]] * 255f);
+
+								if (bw != 0)
+								{
+									biList.Add(bi);
+									bwList.Add(bw);
+									boneSum += bw;
+									newbCount++;
+								}
+
+							}
+							int originalbCount = bCount;
+							bCount = newbCount;
+
+							if (bCount < 4)
+							{
+								int remainder = 4 - bCount;
+
+								for (int k = 0; k < remainder; k++)
+								{
+									biList.Add(0);
+									bwList.Add(0);
+								}
+							}
+							else if (bCount > 4)
+							{
+								int extras = bCount - 4;
+
+								for (int k = 0; k < extras; k++)
+								{
+									var min = bwList.Min();
+									var minIndex = bwList.IndexOf(min);
+									int count = (bwList.Count(x => x == min));
+									bwList.Remove(min);
+									biList.RemoveAt(minIndex);
+									boneSum -= min;
+								}
+							}
+
+							if (boneSum != 255)
+							{
+								int diff = boneSum - 255;
+								var max = bwList.Max();
+								var maxIndex = bwList.IndexOf(max);
+								errorDict.Add(i, diff);
+								if (diff < 0)
+								{
+									bwList[maxIndex] += (byte)Math.Abs(diff);
+								}
+								else
+								{
+									// Subtract difference when over-weight.
+									bwList[maxIndex] -= (byte)Math.Abs(diff);
+								}
+							}
+
+							boneSum = 0;
+							bwList.ForEach(x => boneSum += x);
+
+							blendIndices.Add(biList.ToArray());
+							blendWeights.Add(bwList.ToArray());
+							vTrack += originalbCount;
+						}
+					}
 
 					if (errorDict.Count > 0)
 					{
 						string errorString = "";
 						foreach(var er in errorDict)
 						{
-							errorString += "Vertex: " + er.Key + "\tWeight Count: " + er.Value + "\n";
+							errorString += "Vertex: " + er.Key + "\t Correction Amount: " + er.Value + "\n";
 						}
 
 
-						MessageBox.Show("TexTools detected an affected bone count greater than 4.\n\n" +
-							"TexTools removed the smallest weight counts from the following: \n\n" + errorString, "Over Weight Count", MessageBoxButton.OK, MessageBoxImage.Information);
+						FlexibleMessageBox.Show("Corrected bone weights on the following vertices :\n\n" + errorString, "Weight Correction", MessageBoxButtons.OK, MessageBoxIcon.Information);
+						//FlexibleMessageBox.Show("TexTools detected an affected bone count greater than 4.\n\n" +
+						//	"TexTools removed the smallest weight counts from the following: \n\n" + errorString, "Over Weight Count",MessageBoxButtons.OK,MessageBoxIcon.Information);
 					}
+
+
+					var extraVertDict = modelData.LoD[0].MeshList[m].extraVertDict;
 
 					Dictionary<int, int> indexDict = new Dictionary<int, int>();
 					var inCount = 0;
@@ -815,16 +927,22 @@ namespace FFXIV_TexTools2.IO
 
 					List<int[]> iList = new List<int[]>();
 
-                    var stride = 5;
+					var stride = 5;
+					var indexMax = 0;
 
-                    if (!hasTexc2)
-                    {
-                        stride = 4;
-                    }
+					if (TexCoord2.Count < 1)
+					{
+						stride = 4;
+					}
 
 					for(int i = 0; i < cd.index.Count; i += stride)
 					{
 						iList.Add(cd.index.GetRange(i, stride).ToArray());
+					}
+
+					if(cd.index.Count > 0)
+					{
+						indexMax = cd.index.Max();
 					}
 
 					for (int i = 0; i < iList.Count; i++)
@@ -839,21 +957,21 @@ namespace FFXIV_TexTools2.IO
 								nBlendWeights.Add(blendWeights[iList[i][0]]);
 								nNormals.Add(Normals[iList[i][1]]);
 								nTexCoord.Add(TexCoord[iList[i][2]]);
-								if (hasTexc2)
+								if (TexCoord2.Count > 0 && TexCoord2.Count >= indexMax)
 								{
 									nTexCoord2.Add(TexCoord2[iList[i][3]]);
 								}
 
-								if (nTangents.Count > 0 && hasTexc2)
+								if (nTangents.Count > 0 && TexCoord2.Count > 0)
 								{
 									nTangents.Add(Tangents[iList[i][4]]);
 									nBiNormals.Add(BiNormals[iList[i][4]]);
 								}
-                                else if(nTangents.Count > 0 && !hasTexc2)
-                                {
-                                    nTangents.Add(Tangents[iList[i][3]]);
-                                    nBiNormals.Add(BiNormals[iList[i][3]]);
-                                }
+								else if(nTangents.Count > 0 && TexCoord2.Count < 1)
+								{
+									nTangents.Add(Tangents[iList[i][3]]);
+									nBiNormals.Add(BiNormals[iList[i][3]]);
+								}
 							}
 							else
 							{
@@ -877,12 +995,50 @@ namespace FFXIV_TexTools2.IO
 						}
 					}
 
+					HashSet<int> nVertList = new HashSet<int>();
+
 					Indices.Clear();
 
 					for (int i = 0; i < iList.Count; i++)
 					{
 						var nIndex = indexDict[iList[i][0]];
 						Indices.Add(nIndex);
+					}
+
+					if (importSettings != null && importSettings.ContainsKey(m.ToString()))
+					{
+						if (importSettings[Strings.All].Fix || importSettings[m.ToString()].Fix)
+						{
+							foreach (var ev in extraVertDict)
+							{
+								var a = 0;
+								foreach (var v in nVertex)
+								{
+									bool found = false;
+									if (Vector3.NearEqual(ev.Value, v, new Vector3(0.02f)))
+									{
+										for (int i = 0; i < Indices.Count; i++)
+										{
+											if (a == Indices[i] && !nVertList.Contains(i) && !nVertDict.ContainsKey(ev.Key))
+											{
+												nVertDict.Add(ev.Key, i);
+												nVertList.Add(i);
+												found = true;
+												break;
+
+											}
+
+										}
+
+										if (found)
+										{
+											break;
+										}
+									}
+									a++;
+								}
+							}
+						}
 					}
 
 					MeshGeometry3D mg = new MeshGeometry3D
@@ -899,7 +1055,7 @@ namespace FFXIV_TexTools2.IO
 					}
 					catch (Exception e)
 					{
-						MessageBox.Show("[Import] Error computing tangents.\n\n" + e.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+						FlexibleMessageBox.Show("Error computing tangents.\n\n" + e.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 						return;
 					}
 
@@ -980,9 +1136,9 @@ namespace FFXIV_TexTools2.IO
 			int lineNum = 0;
 			bool inModList = false;
 			JsonEntry modEntry = null;
-            var extraIndexData = modelData.ExtraData;
+			var extraIndexData = modelData.ExtraData;
 
-            List<byte> mdlImport = new List<byte>();
+			List<byte> mdlImport = new List<byte>();
 
 			try
 			{
@@ -1003,7 +1159,7 @@ namespace FFXIV_TexTools2.IO
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show("[Import] Error Accessing .modlist File \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+				FlexibleMessageBox.Show("Error Accessing .modlist File \n" + ex.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 			/*
 			* Imported Vertex Data Start
@@ -1021,16 +1177,16 @@ namespace FFXIV_TexTools2.IO
 
 				for (int i = 0; i < mg.Positions.Count; i++)
 				{
-					if (type.Equals("weapon"))
+					if (type.Equals("weapon") || type.Equals("monster"))
 					{
-						var hx = Half.Parse(mg.Positions[i].X.ToString());
-						id.dataSet1.AddRange(Half.GetBytes(hx));
+						var hx = System.Half.Parse(mg.Positions[i].X.ToString());
+						id.dataSet1.AddRange(System.Half.GetBytes(hx));
 
-						var hy = Half.Parse(mg.Positions[i].Y.ToString());
-						id.dataSet1.AddRange(Half.GetBytes(hy));
+						var hy = System.Half.Parse(mg.Positions[i].Y.ToString());
+						id.dataSet1.AddRange(System.Half.GetBytes(hy));
 
-						var hz = Half.Parse(mg.Positions[i].Z.ToString());
-						id.dataSet1.AddRange(Half.GetBytes(hz));
+						var hz = System.Half.Parse(mg.Positions[i].Z.ToString());
+						id.dataSet1.AddRange(System.Half.GetBytes(hz));
 
 						id.dataSet1.AddRange(BitConverter.GetBytes((short)15360));
 					}
@@ -1061,23 +1217,17 @@ namespace FFXIV_TexTools2.IO
 
 				for (int i = 0; i < mg.Normals.Count; i++)
 				{
-					//Normal X (Half)
+					//Normal X
 					float nX = mg.Normals[i].X;
-
 					id.dataSet2.AddRange(BitConverter.GetBytes(nX));
 
-					//Normal Y (Half)
+					//Normal Y
 					float nY = mg.Normals[i].Y;
-
 					id.dataSet2.AddRange(BitConverter.GetBytes(nY));
 
-					//Normal Z (Half)
+					//Normal Z
 					float nZ = mg.Normals[i].Z;
-
 					id.dataSet2.AddRange(BitConverter.GetBytes(nZ));
-
-					////Normal W (Half)
-					//id.dataSet2.AddRange(new byte[2]);
 
 					var btn = mg.BiTangents[i];
 					var h = cmd.handedness[i];
@@ -1114,28 +1264,27 @@ namespace FFXIV_TexTools2.IO
 
 					//TexCoord X
 					float x = mg.TextureCoordinates[i].X;
-
 					id.dataSet2.AddRange(BitConverter.GetBytes(x));
 
 					//TexCoord Y
 					float y = mg.TextureCoordinates[i].Y * -1;
-
 					id.dataSet2.AddRange(BitConverter.GetBytes(y));
 
 					float z = 0f;
 					float w = 0f;
 
-					if(cmd.texCoord2.Count > 0)
+					if (cmd.texCoord2.Count > 0)
 					{
-						//TexCoord Z
+						//TexCoord2 X
 						z = cmd.texCoord2[i].X;
 
-						//TexCoord W
+						//TexCoord2 Y
 						w = cmd.texCoord2[i].Y * -1;
 					}
 
 					id.dataSet2.AddRange(BitConverter.GetBytes(z));
 					id.dataSet2.AddRange(BitConverter.GetBytes(w));
+
 					//id.dataSet2.AddRange(BitConverter.GetBytes((short)0));
 					//id.dataSet2.AddRange(BitConverter.GetBytes((short)15360));
 				}
@@ -1334,7 +1483,7 @@ namespace FFXIV_TexTools2.IO
 				//LoD Section
 				List<LevelOfDetail> lodList = new List<LevelOfDetail>();
 				List<LevelOfDetail> OriginalLodList = new List<LevelOfDetail>();
-                for (int i = 0; i < 3; i++)
+				for (int i = 0; i < 3; i++)
 				{
 					LevelOfDetail lod = new LevelOfDetail()
 					{
@@ -1342,11 +1491,11 @@ namespace FFXIV_TexTools2.IO
 						MeshCount = br.ReadInt16(),
 					};
 
-                    OriginalLodList.Add(new LevelOfDetail()
-                    {
-                        MeshOffset = lod.MeshOffset,
-                        MeshCount = lod.MeshCount
-                    });
+					OriginalLodList.Add(new LevelOfDetail()
+					{
+						MeshOffset = lod.MeshOffset,
+						MeshCount = lod.MeshCount
+					});
 
 					List<byte> LoDChunk = new List<byte>();
 					//LoD UNK
@@ -1358,11 +1507,12 @@ namespace FFXIV_TexTools2.IO
 					if (i == 0)
 					{
 						int originalSize = br.ReadInt32();
-                        OriginalLodList[i].VertexDataSize = originalSize;
+						OriginalLodList[i].VertexDataSize = originalSize;
 						int vertSize = 0;
 						int vDataSize = 20;
+						int data2Stride = 36;
 
-						if (type.Equals("weapon"))
+						if (type.Equals("weapon") || type.Equals("monster"))
 						{
 							vDataSize = 16;
 						}
@@ -1373,11 +1523,11 @@ namespace FFXIV_TexTools2.IO
 
 							if (extraIndexData.totalExtraCounts != null && extraIndexData.totalExtraCounts.ContainsKey(m))
 							{
-								vertSize += ((mg.Positions.Count + extraIndexData.totalExtraCounts[m]) * vDataSize) + ((mg.Positions.Count + extraIndexData.totalExtraCounts[m]) * 36);
+								vertSize += ((mg.Positions.Count + extraIndexData.totalExtraCounts[m]) * vDataSize) + ((mg.Positions.Count + extraIndexData.totalExtraCounts[m]) * data2Stride);
 							}
 							else
 							{
-								vertSize += (mg.Positions.Count * vDataSize) + (mg.Positions.Count * 36);
+								vertSize += (mg.Positions.Count * vDataSize) + (mg.Positions.Count * data2Stride);
 							}
 						}
 
@@ -1386,18 +1536,18 @@ namespace FFXIV_TexTools2.IO
 					else
 					{
 						lod.VertexDataSize = br.ReadInt32();
-                        OriginalLodList[i].VertexDataSize = lod.VertexDataSize;
+						OriginalLodList[i].VertexDataSize = lod.VertexDataSize;
 
-                    }
+					}
 
 					//LoD Index Buffer Size (int)
 					if (i == 0)
 					{
 						int originalSize = br.ReadInt32();
-                        OriginalLodList[i].IndexDataSize = originalSize;
+						OriginalLodList[i].IndexDataSize = originalSize;
 
 
-                        int idSize = 0;
+						int idSize = 0;
 						foreach(var cmd in cmdList)
 						{
 							var mg = cmd.meshGeometry;
@@ -1416,23 +1566,23 @@ namespace FFXIV_TexTools2.IO
 					else
 					{
 						lod.IndexDataSize = br.ReadInt32();
-                        OriginalLodList[i].IndexDataSize = lod.IndexDataSize;
+						OriginalLodList[i].IndexDataSize = lod.IndexDataSize;
 
-                    }
+					}
 
-                    //LoD Vertex Offset (int)
-                    if (i == 0)
+					//LoD Vertex Offset (int)
+					if (i == 0)
 					{
 						lod.VertexOffset = br.ReadInt32();
-                        OriginalLodList[i].VertexOffset = lod.VertexOffset;
+						OriginalLodList[i].VertexOffset = lod.VertexOffset;
 
-                    }
-                    else
+					}
+					else
 					{
-                        var originalVertexOffset = br.ReadInt32();
-                        OriginalLodList[i].VertexOffset = originalVertexOffset;
+						var originalVertexOffset = br.ReadInt32();
+						OriginalLodList[i].VertexOffset = originalVertexOffset;
 
-                        lod.VertexOffset = lodList[i - 1].VertexOffset + lodList[i - 1].VertexDataSize + lodList[i - 1].IndexDataSize;
+						lod.VertexOffset = lodList[i - 1].VertexOffset + lodList[i - 1].VertexDataSize + lodList[i - 1].IndexDataSize;
 					}
 
 					//LoD Index Offset (int)
@@ -1440,15 +1590,15 @@ namespace FFXIV_TexTools2.IO
 					if (i == 0)
 					{
 						var originalIndexOffset = br.ReadInt32();
-                        OriginalLodList[i].IndexOffset = originalIndexOffset;
-                        lod.IndexOffset = lod.VertexOffset + lod.VertexDataSize;
+						OriginalLodList[i].IndexOffset = originalIndexOffset;
+						lod.IndexOffset = lod.VertexOffset + lod.VertexDataSize;
 						LoDChunk.InsertRange(28, BitConverter.GetBytes(lod.IndexOffset));
 					}
 					else
 					{
-                        var originalIndexOffset = br.ReadInt32();
-                        OriginalLodList[i].IndexOffset = originalIndexOffset;
-                        lod.IndexOffset = lod.VertexOffset + lod.VertexDataSize;
+						var originalIndexOffset = br.ReadInt32();
+						OriginalLodList[i].IndexOffset = originalIndexOffset;
+						lod.IndexOffset = lod.VertexOffset + lod.VertexDataSize;
 						LoDChunk.InsertRange(28, BitConverter.GetBytes(lod.IndexOffset));
 					}
 
@@ -1476,8 +1626,9 @@ namespace FFXIV_TexTools2.IO
 					lodList.Add(lod);
 				}
 
-                //Replace Half with Floats and compress VertexInfo data
-                for (int i = 0; i < lodList[0].MeshCount; i++)
+
+				//Replace Half with Floats and compress VertexInfo data
+				for (int i = 0; i < lodList[0].MeshCount; i++)
 				{
 					var normType = (136 * i) + 26;
 					var bnOffset = (136 * i) + 33;
@@ -1522,9 +1673,9 @@ namespace FFXIV_TexTools2.IO
 
 					for (int j = 0; j < lodList[i].MeshCount; j++)
 					{
-                        OriginalLodList[i].MeshList.Add(new Mesh());
+						OriginalLodList[i].MeshList.Add(new Mesh());
 
-                        MeshInfo meshInfo = new MeshInfo()
+						MeshInfo meshInfo = new MeshInfo()
 						{
 							VertexCount = br.ReadInt32(),
 							IndexCount = br.ReadInt32(),
@@ -1538,18 +1689,19 @@ namespace FFXIV_TexTools2.IO
 							VertexDataBlockCount = br.ReadByte()
 						};
 
-                        OriginalLodList[i].MeshList[j].MeshInfo = new MeshInfo()
-                        {
-                            VertexCount = meshInfo.VertexCount,
-                            IndexCount = meshInfo.IndexCount,
-                            IndexDataOffset = meshInfo.IndexDataOffset,
-                            VertexDataOffsets = new List<int>(meshInfo.VertexDataOffsets),
-                            VertexSizes = new List<int>(meshInfo.VertexSizes)
-                        };
+						OriginalLodList[i].MeshList[j].MeshInfo = new MeshInfo()
+						{
+							VertexCount = meshInfo.VertexCount,
+							IndexCount = meshInfo.IndexCount,
+							IndexDataOffset = meshInfo.IndexDataOffset,
+							VertexDataOffsets = new List<int>(meshInfo.VertexDataOffsets),
+							VertexSizes = new List<int>(meshInfo.VertexSizes)
+						};
 
 						if (i == 0)
 						{
 							meshInfo.VertexSizes[1] = meshInfo.VertexSizes[1] + 12;
+
 							try
 							{
 								var mg = cmdList[j].meshGeometry;
@@ -1611,8 +1763,8 @@ namespace FFXIV_TexTools2.IO
 							{
 								meshIndexPadding = 0;
 							}
-                            meshInfo.IndexDataOffset = meshInfoList[j - 1].IndexDataOffset + meshInfoList[j - 1].IndexCount + meshIndexPadding;
-                            modelDataBlock.AddRange(BitConverter.GetBytes(meshInfo.IndexDataOffset));
+							meshInfo.IndexDataOffset = meshInfoList[j - 1].IndexDataOffset + meshInfoList[j - 1].IndexCount + meshIndexPadding;
+							modelDataBlock.AddRange(BitConverter.GetBytes(meshInfo.IndexDataOffset));
 
 						}
 						else
@@ -1698,13 +1850,14 @@ namespace FFXIV_TexTools2.IO
 
 				}
 
-                modelDataBlock.AddRange(br.ReadBytes(atrStringCount * 4));
+				modelDataBlock.AddRange(br.ReadBytes(atrStringCount * 4));
 
 				if(unk6 > 0)
 				{
 					modelDataBlock.AddRange(br.ReadBytes(unk6 * 20));
 				}
 
+				//Mesh Parts
 				List<MeshPart> meshPart = new List<MeshPart>();
 
 				int meshPadd = 0;
@@ -1721,7 +1874,7 @@ namespace FFXIV_TexTools2.IO
 							MeshPart mp = new MeshPart();
 
 							//Index Offset (int)
-							if (i == 0)
+							if (l == 0 && i == 0)
 							{
 								if (j != 0)
 								{
@@ -1735,7 +1888,7 @@ namespace FFXIV_TexTools2.IO
 									modelDataBlock.AddRange(BitConverter.GetBytes(mp.IndexOffset));
 								}
 							}
-							else if (i == 1)
+							else if (l == 0 && i == 1)
 							{
 								br.ReadBytes(4);
 								if (j == 0)
@@ -1756,7 +1909,7 @@ namespace FFXIV_TexTools2.IO
 							}
 
 							//Index Count (int)
-							if (i < cmdList.Count)
+							if (l == 0 && i < cmdList.Count)
 							{
 								var partsDict = cmdList[i].partsDict;
 
@@ -1784,7 +1937,7 @@ namespace FFXIV_TexTools2.IO
 								modelDataBlock.AddRange(BitConverter.GetBytes(mp.IndexCount));
 							}
 
-							if (i == 0)
+							if (l == 0 && i == 0)
 							{
 								if (j == mPartCount - 1)
 								{
@@ -1819,7 +1972,7 @@ namespace FFXIV_TexTools2.IO
 					}
 				}
 
-                if (unk12 > 0)
+				if (unk12 > 0)
 				{
 					modelDataBlock.AddRange(br.ReadBytes(unk12 * 12));
 				}
@@ -1837,7 +1990,7 @@ namespace FFXIV_TexTools2.IO
 					modelDataBlock.AddRange(br.ReadBytes(4));
 				}
 
-                Dictionary<int, int> nMax = new Dictionary<int, int>();
+				Dictionary<int, int> nMax = new Dictionary<int, int>();
 				Dictionary<int, int> nOffsets = new Dictionary<int, int>();
 				for (int i = 0; i < cmdList.Count; i++)
 				{
@@ -1853,170 +2006,212 @@ namespace FFXIV_TexTools2.IO
 				}
 
 
-                Dictionary<int, int> indexLoc = new Dictionary<int, int>();
-                Dictionary<int, int> indexMin = new Dictionary<int, int>();
-                Dictionary<int, List<int>> extraIndices = new Dictionary<int, List<int>>();
-                List<ExtraIndex> indexCounts = new List<ExtraIndex>();
+				Dictionary<int, int> indexLoc = new Dictionary<int, int>();
+				Dictionary<int, int> indexMin = new Dictionary<int, int>();
+				Dictionary<int, List<int>> extraIndices = new Dictionary<int, List<int>>();
+				List<ExtraIndex> indexCounts = new List<ExtraIndex>();
 
 
-                var pCount = 0;
-                var pCount1 = 0;
-                var pCount2 = 0;
+				var pCount = 0;
+				var pCount1 = 0;
+				var pCount2 = 0;
 
-                if (unk1 > 0)
-                {
-                    for (int i = 0; i < unk1; i++)
-                    {
-                        //not sure
-                        modelDataBlock.AddRange(br.ReadBytes(4));
+				if (unk1 > 0)
+				{
+					for (int i = 0; i < unk1; i++)
+					{
+						//not sure
+						modelDataBlock.AddRange(br.ReadBytes(4));
 
-                        //LoD[0] Extra Data Index
-                        var p1 = br.ReadUInt16();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(p1));
+						//LoD[0] Extra Data Index
+						var p1 = br.ReadUInt16();
+						modelDataBlock.AddRange(BitConverter.GetBytes(p1));
 
-                        //LoD[1] Extra Data Index
-                        var p2 = br.ReadUInt16();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(p2));
+						//LoD[1] Extra Data Index
+						var p2 = br.ReadUInt16();
+						modelDataBlock.AddRange(BitConverter.GetBytes(p2));
 
-                        //LoD[2] Extra Data Index
-                        var p3 = br.ReadUInt16();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(p3));
+						//LoD[2] Extra Data Index
+						var p3 = br.ReadUInt16();
+						modelDataBlock.AddRange(BitConverter.GetBytes(p3));
 
-                        //LoD[0] Extra Data Part Count
-                        var p1n = br.ReadUInt16();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(p1n));
-                        pCount += p1n;
+						//LoD[0] Extra Data Part Count
+						var p1n = br.ReadUInt16();
+						modelDataBlock.AddRange(BitConverter.GetBytes(p1n));
+						pCount += p1n;
 
-                        //LoD[1] Extra Data Part Count
-                        var p2n = br.ReadUInt16();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(p2n));
-                        pCount1 += p2n;
+						//LoD[1] Extra Data Part Count
+						var p2n = br.ReadUInt16();
+						modelDataBlock.AddRange(BitConverter.GetBytes(p2n));
+						pCount1 += p2n;
 
-                        //LoD[2] Extra Data Part Count
-                        var p3n = br.ReadUInt16();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(p3n));
-                        pCount2 += p3n;
+						//LoD[2] Extra Data Part Count
+						var p3n = br.ReadUInt16();
+						modelDataBlock.AddRange(BitConverter.GetBytes(p3n));
+						pCount2 += p3n;
 
-                    }
-                }
+					}
+				}
 
-                if (unk1 > 0)
-                {
-                    for (int i = 0; i < modelData.LoD[0].MeshCount; i++)
-                    {
-                        var ido = OriginalLodList[0].MeshList[i].MeshInfo.IndexDataOffset;
-                        indexLoc.Add(ido, i);
-                    }
-                }
-
-
-                List<int> maskCounts = new List<int>();
-                Dictionary<int, int> totalExtraCounts = new Dictionary<int, int>();
-                if (unk2 > 0)
-                {
-                    for (int i = 0; i < pCount; i++)
-                    {
-                        //Index Offset Start
-                        var m1 = br.ReadInt32();
-                        var iLoc = indexLoc[m1];
-                        modelDataBlock.AddRange(BitConverter.GetBytes(nOffsets[iLoc]));
-
-                        //index count
-                        var mCount = br.ReadInt32();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(mCount));
-
-                        //index offset in unk3
-                        var mOffset = br.ReadInt32();
-                        modelDataBlock.AddRange(BitConverter.GetBytes(mOffset));
+				if (unk1 > 0)
+				{
+					for (int i = 0; i < modelData.LoD[0].MeshCount; i++)
+					{
+						var ido = OriginalLodList[0].MeshList[i].MeshInfo.IndexDataOffset;
+						indexLoc.Add(ido, i);
+					}
+				}
 
 
-                        indexCounts.Add(new ExtraIndex() { IndexLocation = iLoc, IndexCount = mCount });
-                        maskCounts.Add(mCount);
-                    }
+				List<int> maskCounts = new List<int>();
+				Dictionary<int, int> totalExtraCounts = new Dictionary<int, int>();
+				if (unk2 > 0)
+				{
+					for (int i = 0; i < pCount; i++)
+					{
+						//Index Offset Start
+						var m1 = br.ReadInt32();
+						var iLoc = indexLoc[m1];
+						modelDataBlock.AddRange(BitConverter.GetBytes(nOffsets[iLoc]));
 
-                    var remaining = br.ReadBytes((pCount1 + pCount2) * 12);
-                    modelDataBlock.AddRange(remaining);
-                }
+						//index count
+						var mCount = br.ReadInt32();
+						modelDataBlock.AddRange(BitConverter.GetBytes(mCount));
 
-                int totalLoD0MaskCount = 0;
+						//index offset in unk3
+						var mOffset = br.ReadInt32();
+						modelDataBlock.AddRange(BitConverter.GetBytes(mOffset));
 
-                if (unk2 > 0)
-                {
-                    for (int i = 0; i < pCount; i++)
-                    {
-                        totalLoD0MaskCount += maskCounts[i];
-                    }
-                }
 
-                if (unk3 > 0)
-                {
-                    var unk3Remainder = (unk3 * 4) - (totalLoD0MaskCount * 4);
+						indexCounts.Add(new ExtraIndex() { IndexLocation = iLoc, IndexCount = mCount });
+						maskCounts.Add(mCount);
+					}
 
-                    foreach (var ic in indexCounts)
-                    {
-                        HashSet<int> mIndexList = new HashSet<int>();
+					var remaining = br.ReadBytes((pCount1 + pCount2) * 12);
+					modelDataBlock.AddRange(remaining);
+				}
 
-                        for (int i = 0; i < ic.IndexCount; i++)
-                        {
-                            short[] unk3Indices = new short[2];
-                            //index its replacing? attatched to?
-                            var oIndex = br.ReadInt16();
-                            unk3Indices[0] = oIndex;
+				int totalLoD0MaskCount = 0;
 
-                            //extra index following last equipment index
-                            var mIndex = br.ReadInt16();
-                            unk3Indices[1] = mIndex;
-                            mIndexList.Add(mIndex);
+				if (unk2 > 0)
+				{
+					for (int i = 0; i < pCount; i++)
+					{
+						totalLoD0MaskCount += maskCounts[i];
+					}
+				}
 
-                            if (extraIndices.ContainsKey(ic.IndexLocation))
-                            {
-                                extraIndices[ic.IndexLocation].Add(mIndex);
-                            }
-                            else
-                            {
-                                extraIndices.Add(ic.IndexLocation, new List<int>() { mIndex });
-                            }
+				if (unk3 > 0)
+				{
+					var unk3Remainder = (unk3 * 4) - (totalLoD0MaskCount * 4);
 
-                            ic.IndexList.Add(unk3Indices);
-                        }
+					foreach (var ic in indexCounts)
+					{
+						HashSet<int> mIndexList = new HashSet<int>();
+						
+						for (int i = 0; i < ic.IndexCount; i++)
+						{
+							short[] unk3Indices = new short[2];
+							//index its replacing? attatched to?
+							var oIndex = br.ReadInt16();
+							//extra index following last equipment index
+							var mIndex = br.ReadInt16();
 
-                        if (totalExtraCounts.ContainsKey(ic.IndexLocation))
-                        {
-                            totalExtraCounts[ic.IndexLocation] += mIndexList.Count;
-                        }
-                        else
-                        {
-                            totalExtraCounts.Add(ic.IndexLocation, mIndexList.Count);
-                        }
-                    }
+							if(importSettings != null && importSettings.ContainsKey(ic.IndexLocation.ToString()))
+							{
+                                //Disabling hiding for mesh
+								if (importSettings[Strings.All].Disable || importSettings[ic.IndexLocation.ToString()].Disable)
+								{
+									unk3Indices[0] = 0;
+									unk3Indices[1] = 0;
+								}
+                                //Fixing hiding for mesh
+								else if(importSettings[Strings.All].Fix || importSettings[ic.IndexLocation.ToString()].Fix)
+								{
+                                    if (nVertDict.ContainsKey(oIndex))
+									{
+										unk3Indices[0] = (short)nVertDict[oIndex];
+										unk3Indices[1] = mIndex;
+									}
+									else
+									{
+										unk3Indices[0] = 0;
+										unk3Indices[1] = 0;
+									}
+								}
+                                //No true parameters, using default
+                                else
+                                {
+                                    unk3Indices[0] = oIndex;
+                                    unk3Indices[1] = mIndex;
+                                }
+							}
+                            //no import settings were present for mesh, using default
+							else
+							{
+                                unk3Indices[0] = oIndex;
+								unk3Indices[1] = mIndex;
+							}
 
-                    foreach (var ei in extraIndices)
-                    {
-                        indexMin.Add(ei.Key, ei.Value.Min());
-                    }
+							mIndexList.Add(mIndex);
 
-                    foreach(var ic in indexCounts)
-                    {
-                        var iMax = nMax[ic.IndexLocation];
-                        var iMin = indexMin[ic.IndexLocation];
+							if (extraIndices.ContainsKey(ic.IndexLocation))
+							{
+								extraIndices[ic.IndexLocation].Add(mIndex);
+							}
+							else
+							{
+								extraIndices.Add(ic.IndexLocation, new List<int>() { mIndex });
+							}
 
-                        for(int i = 0; i < ic.IndexCount; i++)
-                        {
-                            modelDataBlock.AddRange(BitConverter.GetBytes(ic.IndexList[i][0]));
+							ic.IndexList.Add(unk3Indices);
+						}
 
-                            var mIndex = ic.IndexList[i][1];
-                            short sub = (short)(mIndex - iMin);
-                            short nIndex = (short)(sub + iMax + 1);
-                            modelDataBlock.AddRange(BitConverter.GetBytes(nIndex));
-                        }
-                    }
+						if (totalExtraCounts.ContainsKey(ic.IndexLocation))
+						{
+							totalExtraCounts[ic.IndexLocation] += mIndexList.Count;
+						}
+						else
+						{
+							totalExtraCounts.Add(ic.IndexLocation, mIndexList.Count);
+						}
+					}
 
-                    //the rest of unk3
-                    modelDataBlock.AddRange(br.ReadBytes(unk3Remainder));
-                }
+					foreach (var ei in extraIndices)
+					{
+						indexMin.Add(ei.Key, ei.Value.Min());
+					}
 
-                //Bone index count (int)
-                int boneIndexCount = br.ReadInt32();
+					var m = 0;
+					foreach (var ic in indexCounts)
+					{
+						var iMax = nMax[ic.IndexLocation];
+						var iMin = indexMin[ic.IndexLocation];
+
+						for(int i = 0; i < ic.IndexCount; i++)
+						{
+							var oIndex = ic.IndexList[i][0];
+
+							var mIndex = ic.IndexList[i][1];
+							short nIndex = 0;
+							if(mIndex != 0)
+							{
+								short sub = (short)(mIndex - iMin);
+								nIndex = (short)(sub + iMax + 1);
+							}
+
+							modelDataBlock.AddRange(BitConverter.GetBytes(oIndex));
+							modelDataBlock.AddRange(BitConverter.GetBytes(nIndex));
+						}
+						m++;
+					}
+
+					//the rest of unk3
+					modelDataBlock.AddRange(br.ReadBytes(unk3Remainder));
+				}
+
+				//Bone index count (int)
+				int boneIndexCount = br.ReadInt32();
 				modelDataBlock.AddRange(BitConverter.GetBytes(boneIndexCount));
 
 				//Bone indices
@@ -2071,22 +2266,22 @@ namespace FFXIV_TexTools2.IO
 					compModelSizes.Add(compModelData.Length + 16 + padding);
 				}
 
-                /* 
+				/* 
 				 * -------------------------------
 				 * Model Data Block End
 				 * -------------------------------
 				 */
 
 
-                /*
+				/*
 				 * ---------------------
 				 * Vertex Data Start
 				 * ---------------------
 				*/
-                List<int> compMeshSizes = new List<int>();
-                List<int> compIndexSizes = new List<int>();
+				List<int> compMeshSizes = new List<int>();
+				List<int> compIndexSizes = new List<int>();
 
-                List<DataBlocks> dbList = new List<DataBlocks>();
+				List<DataBlocks> dbList = new List<DataBlocks>();
 				DataBlocks db = new DataBlocks();
 
 				if(extraIndexData.totalExtraCounts != null)
@@ -2095,8 +2290,8 @@ namespace FFXIV_TexTools2.IO
 					{
 						var extraLoc = ec.Key;
 						var extraVerts = ec.Value;
-                        var LoD0 = OriginalLodList[0];
-                        var meshInfo = LoD0.MeshList[extraLoc].MeshInfo;
+						var LoD0 = OriginalLodList[0];
+						var meshInfo = LoD0.MeshList[extraLoc].MeshInfo;
 
 						var baseVertsToRead = meshInfo.VertexCount - extraVerts;
 						br.BaseStream.Seek(LoD0.VertexOffset + meshInfo.VertexDataOffsets[0], SeekOrigin.Begin);
@@ -2196,43 +2391,43 @@ namespace FFXIV_TexTools2.IO
 				}
 
 
-                db.IDBParts = (int)Math.Ceiling(db.IndexDataBlock.Count / 16000f);
-                int[] IDB1PartCounts = new int[db.IDBParts];
-                int IDB1Remaining = db.IndexDataBlock.Count;
+				db.IDBParts = (int)Math.Ceiling(db.IndexDataBlock.Count / 16000f);
+				int[] IDB1PartCounts = new int[db.IDBParts];
+				int IDB1Remaining = db.IndexDataBlock.Count;
 
-                for (int i = 0; i < db.IDBParts; i++)
-                {
+				for (int i = 0; i < db.IDBParts; i++)
+				{
 
-                    if (IDB1Remaining >= 16000)
-                    {
-                        IDB1PartCounts[i] = 16000;
-                        IDB1Remaining -= 16000;
-                    }
-                    else
-                    {
-                        IDB1PartCounts[i] = IDB1Remaining;
-                    }
-                }
+					if (IDB1Remaining >= 16000)
+					{
+						IDB1PartCounts[i] = 16000;
+						IDB1Remaining -= 16000;
+					}
+					else
+					{
+						IDB1PartCounts[i] = IDB1Remaining;
+					}
+				}
 
-                var indexPadding = 0;
+				var indexPadding = 0;
 
-                for(int i = 0; i < db.IDBParts; i++)
-                {
-                    var compIndexData1 = Compressor(db.IndexDataBlock.GetRange(i * 16000, IDB1PartCounts[i]).ToArray());
+				for(int i = 0; i < db.IDBParts; i++)
+				{
+					var compIndexData1 = Compressor(db.IndexDataBlock.GetRange(i * 16000, IDB1PartCounts[i]).ToArray());
 
-                    compressedData.AddRange(BitConverter.GetBytes(16));
-                    compressedData.AddRange(BitConverter.GetBytes(0));
-                    compressedData.AddRange(BitConverter.GetBytes(compIndexData1.Length));
-                    compressedData.AddRange(BitConverter.GetBytes(IDB1PartCounts[i]));
-                    compressedData.AddRange(compIndexData1);
+					compressedData.AddRange(BitConverter.GetBytes(16));
+					compressedData.AddRange(BitConverter.GetBytes(0));
+					compressedData.AddRange(BitConverter.GetBytes(compIndexData1.Length));
+					compressedData.AddRange(BitConverter.GetBytes(IDB1PartCounts[i]));
+					compressedData.AddRange(compIndexData1);
 
-                    indexPadding = 128 - ((compIndexData1.Length + 16) % 128);
+					indexPadding = 128 - ((compIndexData1.Length + 16) % 128);
 
-                    compressedData.AddRange(new byte[indexPadding]);
+					compressedData.AddRange(new byte[indexPadding]);
 
-                    db.compIndexDataBlockSize += compIndexData1.Length + 16 + indexPadding;
-                    compIndexSizes.Add(compIndexData1.Length + 16 + indexPadding);
-                }
+					db.compIndexDataBlockSize += compIndexData1.Length + 16 + indexPadding;
+					compIndexSizes.Add(compIndexData1.Length + 16 + indexPadding);
+				}
 
 				dbList.Add(db);
 
@@ -2245,22 +2440,22 @@ namespace FFXIV_TexTools2.IO
 
 					for (int j = 0; j < lodList[i].MeshCount; j++)
 					{
-                        var lod = OriginalLodList[i];
-                        var meshInfo = lod.MeshList[j].MeshInfo;
+						var lod = OriginalLodList[i];
+						var meshInfo = lod.MeshList[j].MeshInfo;
 
 
 						br.BaseStream.Seek(lod.VertexOffset + meshInfo.VertexDataOffsets[0], SeekOrigin.Begin);
 
-                        var p1 = meshInfo.VertexCount * meshInfo.VertexSizes[0];
-                        var p2 = meshInfo.VertexCount * meshInfo.VertexSizes[1];
-                        db.VertexDataBlock.AddRange(br.ReadBytes(p1));
+						var p1 = meshInfo.VertexCount * meshInfo.VertexSizes[0];
+						var p2 = meshInfo.VertexCount * meshInfo.VertexSizes[1];
+						db.VertexDataBlock.AddRange(br.ReadBytes(p1));
 						db.VertexDataBlock.AddRange(br.ReadBytes(p2));
 					}
 
 					for (int j = 0; j < lodList[i].MeshCount; j++)
 					{
-                        var lod = OriginalLodList[i];
-                        var meshInfo = lod.MeshList[j].MeshInfo;
+						var lod = OriginalLodList[i];
+						var meshInfo = lod.MeshList[j].MeshInfo;
 
 						br.BaseStream.Seek(lod.IndexOffset + (meshInfo.IndexDataOffset), SeekOrigin.Begin);
 
@@ -2339,7 +2534,7 @@ namespace FFXIV_TexTools2.IO
 				 */
 				int headerLength = 256;
 
-                if ((compMeshSizes.Count + modelDataParts + 3 + compIndexSizes.Count) > 24)
+				if ((compMeshSizes.Count + modelDataParts + 3 + compIndexSizes.Count) > 24)
 				{
 					headerLength = 384;
 				}
@@ -2540,13 +2735,13 @@ namespace FFXIV_TexTools2.IO
 				}
 				VDBPartCount += dbList[0].VDBParts;
 				//Index Data Block LoD[1] padded size
-                for(int i = 0; i < dbList[0].IDBParts; i++)
-                {
-                    datHeader.AddRange(BitConverter.GetBytes((short)compIndexSizes[i]));
-                }
+				for(int i = 0; i < dbList[0].IDBParts; i++)
+				{
+					datHeader.AddRange(BitConverter.GetBytes((short)compIndexSizes[i]));
+				}
 
-                //Vertex Data Block LoD[2] part padded sizes
-                for (int i = 0; i < dbList[1].VDBParts; i++)
+				//Vertex Data Block LoD[2] part padded sizes
+				for (int i = 0; i < dbList[1].VDBParts; i++)
 				{
 					datHeader.AddRange(BitConverter.GetBytes((short)compMeshSizes[VDBPartCount + i]));
 				}
@@ -2580,7 +2775,7 @@ namespace FFXIV_TexTools2.IO
 			public int compVertexDataBlockSize = 0;
 			public int compIndexDataBlockSize = 0;
 			public int VDBParts = 0;
-            public int IDBParts = 0;
+			public int IDBParts = 0;
 
 			public List<byte> VertexDataBlock = new List<byte>();
 			public List<byte> IndexDataBlock = new List<byte>();
@@ -2608,13 +2803,13 @@ namespace FFXIV_TexTools2.IO
 			public List<int> bIndex = new List<int>();
 			public List<int> vCount = new List<int>();
 
-            public List<int> vIndexList = new List<int>();
-            public List<int> nIndexList = new List<int>();
-            public List<int> bnIndexList = new List<int>();
-            public List<int> tcIndexList = new List<int>();
-            public List<int> tc2IndexList = new List<int>();
+			public List<int> vIndexList = new List<int>();
+			public List<int> nIndexList = new List<int>();
+			public List<int> bnIndexList = new List<int>();
+			public List<int> tcIndexList = new List<int>();
+			public List<int> tc2IndexList = new List<int>();
 
-            public Dictionary<int, int> partsDict = new Dictionary<int, int>();
+			public Dictionary<int, int> partsDict = new Dictionary<int, int>();
 		}
 
 		public class ColladaMeshData
@@ -2646,23 +2841,23 @@ namespace FFXIV_TexTools2.IO
 			int offset = 0;
 			bool dataOverwritten = false;
 
-            if (inModList)
-            {
-                if (modEntry.modOffset == 0)
-                {
-                    MessageBox.Show("TexTools detected a Mod List entry with a Mod Offset of 0.\n\n" +
-                        "Please submit a bug report along with your modlist file.", "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return 0;
-                }
-                else if (modEntry.originalOffset == 0)
-                {
-                    MessageBox.Show("TexTools detected a Mod List entry with an Original Offset of 0.\n\n" +
-                        "Please submit a bug report along with your modlist file.", "Import Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return 0;
-                }
-            }
+			if (inModList)
+			{
+				if (modEntry.modOffset == 0)
+				{
+					FlexibleMessageBox.Show("TexTools detected a Mod List entry with a Mod Offset of 0.\n\n" +
+						"Please submit a bug report along with your modlist file.", "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+					return 0;
+				}
+				else if (modEntry.originalOffset == 0)
+				{
+				   FlexibleMessageBox.Show("TexTools detected a Mod List entry with an Original Offset of 0.\n\n" +
+						"Please submit a bug report along with your modlist file.", "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+					return 0;
+				}
+			}
 
-            var modDatPath = string.Format(Info.datDir, Strings.ItemsDat, Info.ModDatDict[Strings.ItemsDat]);
+			var modDatPath = string.Format(Info.datDir, Strings.ItemsDat, Info.ModDatDict[Strings.ItemsDat]);
 
 			try
 			{
@@ -2708,7 +2903,7 @@ namespace FFXIV_TexTools2.IO
 							{
 								JsonEntry emptyEntry = JsonConvert.DeserializeObject<JsonEntry>(line);
 
-								if (emptyEntry.fullPath.Equals(""))
+								if (emptyEntry.fullPath.Equals("") && emptyEntry.datFile.Equals(Strings.ItemsDat))
 								{
 									if(emptyEntry.modOffset != 0)
 									{
@@ -2774,7 +2969,7 @@ namespace FFXIV_TexTools2.IO
 						}
 						catch (Exception ex)
 						{
-							MessageBox.Show("[Import] Error Accessing .modlist File \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+							FlexibleMessageBox.Show("Error Accessing .modlist File \n" + ex.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 						}
 
 
@@ -2803,8 +2998,8 @@ namespace FFXIV_TexTools2.IO
 							}
 							else
 							{
-								MessageBox.Show("[Import] There was an issue obtaining the .dat4 offset to write data to, try importing again. " +
-												"\n\n If the problem persists, please submit a bug report.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+								FlexibleMessageBox.Show("There was an issue obtaining the .dat4 offset to write data to, try importing again. " +
+												"\n\n If the problem persists, please submit a bug report.", "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 								return 0;
 							}
 						}
@@ -2813,7 +3008,7 @@ namespace FFXIV_TexTools2.IO
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show("[Import] Error Accessing .dat4 File \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+				FlexibleMessageBox.Show("Error Accessing .dat4 File \n" + ex.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 				return 0;
 			}
 
@@ -2870,7 +3065,7 @@ namespace FFXIV_TexTools2.IO
 					}
 					catch (Exception ex)
 					{
-						MessageBox.Show("[Import] Error Accessing .modlist File \n" + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+						FlexibleMessageBox.Show("Error Accessing .modlist File \n" + ex.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
 					}
 				}
 			}
