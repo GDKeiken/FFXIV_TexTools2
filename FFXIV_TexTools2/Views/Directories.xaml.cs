@@ -34,22 +34,18 @@ namespace FFXIV_TexTools2.Views
             InitializeComponent();
             DataContext = Properties.Settings.Default;
 
-            var savePath = Path.GetFullPath(Properties.Settings.Default.Save_Directory);
-            saveDir.Text = savePath;
+            saveDir.Text = Path.GetFullPath(Properties.Settings.Default.Save_Directory);
 
-            var ffxivPath = Path.GetFullPath(Properties.Settings.Default.FFXIV_Directory);
-            FFXIVDir.Text = ffxivPath;
+            FFXIVDir.Text = Path.GetFullPath(Properties.Settings.Default.FFXIV_Directory);
 
-            var modListPath = Path.GetFullPath(Properties.Settings.Default.Modlist_Directory);
-            modListDir.Text = modListPath;
+            modListDir.Text = Path.GetFullPath(Properties.Settings.Default.Modlist_Directory);
 
-            var indexBackupsPath = Path.GetFullPath(Properties.Settings.Default.IndexBackups_Directory);
-            indexBackupsDir.Text = indexBackupsPath;
-			
-			modsDir.Text = Path.GetFullPath(Properties.Settings.Default.Mods_Directory);
-		}
+            indexBackupsDir.Text = Path.GetFullPath(Properties.Settings.Default.IndexBackups_Directory);
 
-        private void FFXIVDirButton_Click(object sender, RoutedEventArgs e)
+            ModPackDir.Text = Path.GetFullPath(Properties.Settings.Default.ModPack_Directory);
+        }
+
+		private void FFXIVDirButton_Click(object sender, RoutedEventArgs e)
         {
             FolderSelectDialog folderSelect = new FolderSelectDialog()
             {
@@ -193,6 +189,55 @@ namespace FFXIV_TexTools2.Views
             }
         }
 
+        private void ModPackButton_Click(object sender, RoutedEventArgs e)
+        {
+            var oldSaveLocation = ModPackDir.Text;
+            FolderSelectDialog folderSelect = new FolderSelectDialog()
+            {
+                Title = "Select new location of ModPack folder"
+            };
+            folderSelect.InitialDirectory = oldSaveLocation;
+
+            var result = folderSelect.ShowDialog();
+            if (result)
+            {
+                if (FlexibleMessageBox.Show("Would you like to move the existing data to the new location?", "Move Data?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.Yes)
+                {
+                    try
+                    {
+                        Directory.Move(oldSaveLocation, folderSelect.FileName);
+                    }
+                    catch
+                    {
+                        var newLoc = folderSelect.FileName + "\\ModPacks";
+                        Directory.CreateDirectory(newLoc);
+
+                        foreach (string dirPath in Directory.GetDirectories(oldSaveLocation, "*", SearchOption.AllDirectories))
+                        {
+                            Directory.CreateDirectory(dirPath.Replace(oldSaveLocation, newLoc));
+                        }
+
+                        foreach (string newPath in Directory.GetFiles(oldSaveLocation, "*.*", SearchOption.AllDirectories))
+                        {
+                            File.Copy(newPath, newPath.Replace(oldSaveLocation, newLoc), true);
+                        }
+
+                        DeleteDirectory(oldSaveLocation);
+                    }
+                }
+                else
+                {
+                    Directory.CreateDirectory(folderSelect.FileName + "\\ModPacks");
+                }
+
+                Properties.Settings.Default.ModPack_Directory = folderSelect.FileName + "\\ModPacks";
+                Properties.Settings.Default.Save();
+
+                FlexibleMessageBox.Show("Location of ModPacks folder changed.\n\n" +
+                     "New Location: " + folderSelect.FileName + "\\ModPacks", "New Directory", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ModPackDir.Text = folderSelect.FileName + "\\ModPacks";
+            }
+        }
 
         private static void DeleteDirectory(string target_dir)
         {
@@ -211,22 +256,5 @@ namespace FFXIV_TexTools2.Views
 
             Directory.Delete(target_dir, false);
         }
-
-		private void modsDirButton_Click(object sender, RoutedEventArgs e)
-		{
-			string oldModListLocation = modsDir.Text;
-			FolderSelectDialog folderSelect = new FolderSelectDialog()
-			{
-				Title = "Select new location to look for Mod file",
-				InitialDirectory = oldModListLocation
-			};
-
-			if (folderSelect.ShowDialog())
-			{
-				Properties.Settings.Default.Mods_Directory = folderSelect.FileName;
-				Properties.Settings.Default.Save();
-				modsDir.Text = folderSelect.FileName;
-			}
-		}
 	}
 }

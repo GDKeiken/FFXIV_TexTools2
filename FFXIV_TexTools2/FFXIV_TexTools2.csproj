@@ -184,6 +184,11 @@
     <Compile Include="Custom\CustomPhongMaterial.cs" />
     <Compile Include="Custom\CustomRenderTechniquesManager.cs" />
     <Compile Include="Model\VFXData.cs" />
+    <Compile Include="Resources\Dialogs.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Dialogs.resx</DependentUpon>
+    </Compile>
     <Compile Include="ViewModel\BaseViewModel.cs" />
     <Compile Include="ViewModel\CategoryViewModel.cs" />
     <Compile Include="Model\ComboBoxInfo.cs" />
@@ -354,6 +359,10 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Dialogs.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Dialogs.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\Strings.fr.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Strings.fr.Designer.cs</LastGenOutput>
@@ -417,6 +426,7 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Resources\ImportFile_16x.png" />
+    <Resource Include="Resources\textureDNE.png" />
     <Content Include="sharpdx_direct3d11_1_effects_arm.dll" />
     <Content Include="sharpdx_direct3d11_1_effects_x64.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

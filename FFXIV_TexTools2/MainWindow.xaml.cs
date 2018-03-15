@@ -352,11 +352,31 @@ namespace FFXIV_TexTools2
 
                     foreach (var datName in Info.ModDatDict)
                     {
-                        var datPath = string.Format(Info.datDir, datName.Key, datName.Value);
+                        var datNum = 0;
 
-                        if (File.Exists(datPath))
+                        if (datName.Key.Equals(Strings.ItemsDat))
                         {
-                            File.Delete(datPath);
+                            for (int i = 4; i < 10; i++)
+                            {
+                                var datPath = string.Format(Info.datDir, datName.Key, i);
+
+                                if (File.Exists(datPath))
+                                {
+                                    File.Delete(datPath);
+                                }
+                            }
+                        }
+                        else if (datName.Key.Equals(Strings.UIDat))
+                        {
+                            for (int i = 1; i < 5; i++)
+                            {
+                                var datPath = string.Format(Info.datDir, datName.Key, i);
+
+                                if (File.Exists(datPath))
+                                {
+                                    File.Delete(datPath);
+                                }
+                            }
                         }
                     }
 
@@ -537,7 +557,7 @@ namespace FFXIV_TexTools2
 
         private void Menu_ImportModpack_Click(object sender, RoutedEventArgs e)
         {
-			string mpDir = Properties.Settings.Default.Mods_Directory;
+            string mpDir = Properties.Settings.Default.ModPack_Directory;
 
             if (!Directory.Exists(mpDir))
             {
@@ -551,6 +571,7 @@ namespace FFXIV_TexTools2
             if(ofd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 ImportModPack imp = new ImportModPack(ofd.FileName);
+                imp.Owner = this;
                 imp.Show();
             }
 

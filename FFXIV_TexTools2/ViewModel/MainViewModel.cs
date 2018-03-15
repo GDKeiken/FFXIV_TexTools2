@@ -152,15 +152,6 @@ namespace FFXIV_TexTools2.ViewModel
                 Properties.Settings.Default.Save();
             }
 
-			string modsDir = Properties.Settings.Default.Mods_Directory;
-			if (String.IsNullOrEmpty(modsDir))
-			{
-				string md = Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments) + "\\TexTools\\ModPacks";
-				Directory.CreateDirectory(md);
-				Properties.Settings.Default.Mods_Directory = md;
-				Properties.Settings.Default.Save();
-			}
-
 			if (!Directory.Exists(indexBackupDir))
             {
                 Properties.Settings.Default.FFXIV_Ver = ffxivVersion.ToString();
@@ -281,10 +272,22 @@ namespace FFXIV_TexTools2.ViewModel
                  "A new modlist will be created, you may remove the old modlist from the ffxiv folder. \n\n" + e.Message, "ModList Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
-            string mpDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\TexTools\\ModPacks";
-            if (!Directory.Exists(mpDir))
+            string mpDir = Properties.Settings.Default.ModPack_Directory;
+            if (mpDir.Equals(""))
             {
-                Directory.CreateDirectory(mpDir);
+                mpDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\TexTools\\ModPacks";
+                if (!Directory.Exists(mpDir))
+                {
+                    Directory.CreateDirectory(mpDir);
+                    Properties.Settings.Default.ModPack_Directory = mpDir;
+                    Properties.Settings.Default.Save();
+                }
+                else
+                {
+                    Properties.Settings.Default.ModPack_Directory = mpDir;
+                    Properties.Settings.Default.Save();
+
+                }
             }
         }
 

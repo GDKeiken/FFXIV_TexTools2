@@ -20,10 +20,9 @@ namespace FFXIV_TexTools2.Views
     /// </summary>
     public partial class MakeModPack : Window
     {
-
         JsonEntry modEntry = null;
         List<ModPackItems> packList = new List<ModPackItems>();
-		string mpDir = Properties.Settings.Default.Mods_Directory;
+        string mpDir = Properties.Settings.Default.ModPack_Directory;
         int modCount = 0;
         int modSize = 0;
         ModPackItems selectedItem;
@@ -338,7 +337,7 @@ namespace FFXIV_TexTools2.Views
             {
                 var mOffset = mpi.Entry.modOffset;
                 var datFile = mpi.Entry.datFile;
-                var datNum = int.Parse(Info.ModDatDict[mpi.Entry.datFile]);
+                int datNum = ((mOffset / 8) & 0x0F) / 2;
 
                 var datPath = string.Format(Info.datDir, datFile, datNum);
 

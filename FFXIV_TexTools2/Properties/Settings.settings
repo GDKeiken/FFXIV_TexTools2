@@ -26,7 +26,7 @@
     <Setting Name="Default_Race" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
-    <Setting Name="Mods_Directory" Type="System.String" Scope="User">
+    <Setting Name="ModPack_Directory" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
   </Settings>
