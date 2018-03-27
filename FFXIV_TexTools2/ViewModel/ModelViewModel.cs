@@ -1050,11 +1050,13 @@ namespace FFXIV_TexTools2.ViewModel
                     }
                     else
                     {
+						bool isA8R8G8B8 = false;
 
-                        if (mtrlData.NormalOffset != 0)
+						if (mtrlData.NormalOffset != 0)
                         {
                             normalData = TEX.GetTex(mtrlData.NormalOffset, Strings.ItemsDat);
-                        }
+							isA8R8G8B8 = (normalData == null) ? false : normalData.Type.Equals(TextureTypes.A8R8G8B8);
+						}
 
                         //if (mtrlData.MaskOffset != 0)
                         //{
@@ -1068,55 +1070,70 @@ namespace FFXIV_TexTools2.ViewModel
                             if (mtrlData.DiffusePath.Contains("human") && !mtrlData.DiffusePath.Contains("demi"))
                             {
                                 isBody = true;
-                                var normalRaw = TEX.TexRawData(normalData);
-                                var diffuseRaw = TEX.TexRawData(diffuseData);
 
-                                if (normalData.Type.Equals(TextureTypes.A8R8G8B8))
-                                {
-                                    diffuseBMP = ConvertToBitmapSourceFromArray(diffuseRaw, diffuseData);
-                                    normalBMP = ConvertToBitmapSourceFromArray(normalRaw, normalData);
+                                if (isA8R8G8B8)
+								{
+									byte[] diffuseRaw = TEX.TexRawData(diffuseData);
+									diffuseBMP = ConvertToBitmapSourceFromArray(diffuseRaw, diffuseData);
                                 }
                                 else
                                 {
-                                    diffuseBMP = Imaging.CreateBitmapSourceFromHBitmap(diffuseData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                                    normalBMP = Imaging.CreateBitmapSourceFromHBitmap(normalData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+									diffuseBMP = Imaging.CreateBitmapSourceFromHBitmap(diffuseData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
                                 }
                             }
                         }
 
-                        if (!isBody && mtrlData.SpecularOffset != 0)
-                        {
-                            specularData = TEX.GetTex(mtrlData.SpecularOffset, Strings.ItemsDat);
-                            var specularRaw = TEX.TexRawData(specularData);
+						if (isBody)
+						{
+							if (normalData != null)
+							{
+								if (isA8R8G8B8)
+								{
+									byte[] normalRaw = TEX.TexRawData(normalData);
+									normalBMP = ConvertToBitmapSourceFromArray(normalRaw, normalData);
+								}
+								else
+								{
+									normalBMP = Imaging.CreateBitmapSourceFromHBitmap(normalData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+								}
+							}
+						}
+						else
+						{
+							if (mtrlData.SpecularOffset != 0)
+							{
+								specularData = TEX.GetTex(mtrlData.SpecularOffset, Strings.ItemsDat);
+								var specularRaw = TEX.TexRawData(specularData);
 
-                            if (specularData.Type.Equals(TextureTypes.A8R8G8B8))
-                            {
-                                specularBMP = ConvertToBitmapSourceFromArray(specularRaw, specularData);
-                            }
-                            else
-                            {
-                                specularBMP = Imaging.CreateBitmapSourceFromHBitmap(specularData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                            }
-                        }
+								if (specularData.Type.Equals(TextureTypes.A8R8G8B8))
+								{
+									specularBMP = ConvertToBitmapSourceFromArray(specularRaw, specularData);
+								}
+								else
+								{
+									specularBMP = Imaging.CreateBitmapSourceFromHBitmap(specularData.BMP.GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+								}
+							}
 
-                        if (!isBody && specularData == null)
-                        {
-                            var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, maskData, null, mtrlData);
-                            diffuseBMP = maps[0];
-                            specularBMP = maps[1];
-                            normalBMP = maps[2];
-                            alphaBMP = maps[3];
-                            emissiveBMP = maps[4];
-                        }
-                        else if (!isBody && specularData != null)
-                        {
-                            var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, null, specularData, mtrlData);
-                            diffuseBMP = maps[0];
-                            specularBMP = maps[1];
-                            normalBMP = maps[2];
-                            alphaBMP = maps[3];
-                            emissiveBMP = maps[4];
-                        }
+							if (specularData == null)
+							{
+								var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, maskData, null, mtrlData);
+								diffuseBMP = maps[0];
+								specularBMP = maps[1];
+								normalBMP = maps[2];
+								alphaBMP = maps[3];
+								emissiveBMP = maps[4];
+							}
+							else// if (specularData != null)
+							{
+								var maps = TexHelper.MakeModelTextureMaps(normalData, diffuseData, null, specularData, mtrlData);
+								diffuseBMP = maps[0];
+								specularBMP = maps[1];
+								normalBMP = maps[2];
+								alphaBMP = maps[3];
+								emissiveBMP = maps[4];
+							}
+						}
 
                         normalData?.Dispose();
                         maskData?.Dispose();
