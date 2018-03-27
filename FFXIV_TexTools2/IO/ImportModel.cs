@@ -193,8 +193,20 @@ namespace FFXIV_TexTools2.IO
 											{
 												var name = reader["name"];
 
-												boneJointDict.Add(sid, name);
-											}
+											    try
+											    {
+											        boneJointDict.Add(sid, name);
+											    }
+											    catch (Exception e)
+											    {
+											        FlexibleMessageBox.Show("Duplicate bone found.\n" +
+											                                "Bone: " + sid + "\n\n" +
+											                                "Delete the duplicate bone and try again.\n\n" +
+											                                "Error: " + e.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                                    return;
+											    }
+
+                                            }
 										}
 									}
 								}
@@ -274,9 +286,21 @@ namespace FFXIV_TexTools2.IO
 									var atr = reader["name"];
 									var id = reader["id"];
 
-									meshNameDict.Add(id, atr);
+								    try
+								    {
+								        meshNameDict.Add(id, atr);
+								    }
+								    catch (Exception e)
+								    {
+								        FlexibleMessageBox.Show("Duplicate mesh found.\n" +
+								                                "Mesh: " + id + "\n\n" +
+								                                "Full Name: " + atr + "\n\n" +
+                                                                "Delete or Rename the duplicate mesh and try again.\n\n" +
+								                                "Error: " + e.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+								        return;
+								    }
 
-									var meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, 1));
+                                    var meshNum = int.Parse(atr.Substring(atr.LastIndexOf("_") + 1, 1));
 
 									if (atr.Contains("."))
 									{
@@ -362,12 +386,36 @@ namespace FFXIV_TexTools2.IO
 									if (atr.Contains("."))
 									{
 										var num = atr.Substring(atr.LastIndexOf(".") + 1);
-										pDict[meshNum].Add(int.Parse(num), cData);
+									    try
+									    {
+									        pDict[meshNum].Add(int.Parse(num), cData);
+									    }
+									    catch (Exception e)
+									    {
+									        FlexibleMessageBox.Show("Duplicate mesh part found.\n" +
+									                                "Mesh: " + meshNum + "\tPart: " + num + "\n" +
+                                                                    "Full Name: " + atr + "\n\n" +
+									                                "Delete or Rename the duplicate mesh part and try again.\n\n" +
+									                                "Error: " + e.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                        }
 									}
 									else
 									{
-										pDict[meshNum].Add(0, cData);
-									}
+									    try
+									    {
+									        pDict[meshNum].Add(0, cData);
+
+									    }
+									    catch (Exception e)
+									    {
+									        FlexibleMessageBox.Show("Duplicate mesh part found.\n" +
+									                                "Mesh: " + meshNum + "\tPart: 0" + "\n" +
+									                                "Full Name: " + atr + "\n\n" +
+                                                                    "Delete or Rename the duplicate mesh part and try again.\n\n" +
+									                                "Error: " + e.Message, "ImportModel Error " + Info.appVersion, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                        }
+
+                                    }
 								}
 								//go to controller element
 								else if (reader.Name.Equals("controller"))
@@ -1977,12 +2025,29 @@ namespace FFXIV_TexTools2.IO
 								}
 							}
 
-							//Attributes (int)
-							mp.Attributes = br.ReadInt32();
-							modelDataBlock.AddRange(BitConverter.GetBytes(mp.Attributes));
+						    //Attributes (int)
+                            mp.Attributes = br.ReadInt32();
 
-							//Bone reference offset (short)
-							mp.BoneOffset = br.ReadInt16();
+                            if (importSettings != null && importSettings.ContainsKey(i.ToString()) && l == 0)
+                            {
+                                if (importSettings[i.ToString()].PartDictionary != null)
+                                {
+                                    var attr = importSettings[i.ToString()].PartDictionary[j];
+                                    modelDataBlock.AddRange(BitConverter.GetBytes(attr));
+                                }
+                                else
+                                {
+                                    modelDataBlock.AddRange(BitConverter.GetBytes(mp.Attributes));
+                                }
+
+                            }
+                            else
+						    {
+						        modelDataBlock.AddRange(BitConverter.GetBytes(mp.Attributes));
+                            }
+
+                            //Bone reference offset (short)
+                            mp.BoneOffset = br.ReadInt16();
 							modelDataBlock.AddRange(BitConverter.GetBytes((short)mp.BoneOffset));
 
 							//Bone reference count (short)
