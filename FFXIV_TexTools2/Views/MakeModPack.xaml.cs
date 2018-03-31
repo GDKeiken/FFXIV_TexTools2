@@ -341,6 +341,7 @@ namespace FFXIV_TexTools2.Views
 
             pd = new ProgressDialog();
             pd.Title = "ModPack Maker";
+            pd.ImportingLabel.Content = "Creating ModPack...";
             pd.Owner = App.Current.MainWindow;
             pd.Show();
 
@@ -349,6 +350,7 @@ namespace FFXIV_TexTools2.Views
 
             mpName = modPackName.Text;
 
+            CreateButton.IsEnabled = false;
             backgroundWorker.RunWorkerAsync();          
         }
 
@@ -416,6 +418,7 @@ namespace FFXIV_TexTools2.Views
             var currentPackCount = 0;
             long offset = 0;
             float i = 0;
+            List<byte> modPackData = new List<byte>();
 
             if (!File.Exists(mpDir + "\\" + mpName + ".ttmp"))
             {
@@ -447,7 +450,6 @@ namespace FFXIV_TexTools2.Views
                             foreach (var mpi in pack)
                             {
                                 List<string> modPackList = new List<string>();
-                                List<byte> modPackData = new List<byte>();
 
                                 var currentImport = mpi.Name + "....";
                                 backgroundWorker.ReportProgress((int)((i / packCount) * 100), currentImport);
@@ -473,6 +475,8 @@ namespace FFXIV_TexTools2.Views
                                 };
 
                                 modPackList.Add(JsonConvert.SerializeObject(mpj));
+
+                                modPackData.Clear();
 
                                 using (BinaryReader br = new BinaryReader(File.OpenRead(datPath)))
                                 {
